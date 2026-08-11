@@ -1,0 +1,11 @@
+// Automatically clears the layout if the DevTools window layout changes
+function detectInspector() {
+    const threshold = 160;
+    // Compares window size variations caused by the open panel
+    if (window.outerWidth - window.innerWidth > threshold || 
+        window.outerHeight - window.innerHeight > threshold) {
+        document.body.innerHTML = "<h1>Unauthorized Inspection Detected.</h1>";
+        window.location.reload(); // Hard reset
+    }
+}
+setInterval(detectInspector, 500);

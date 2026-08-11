@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+    <meta charset="UTF-8">
+    <title>Stealth Infinite Stream Cipher</title>
+    <style>
+        :root {
+            --primary: #c026d3;
+            --bg: #fafafa;
+            --card-bg: #ffffff;
+            --text: #171717;
+            --border: #e5e7eb;
+            --success: #16a34a;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .cipher-container {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 500px;
+            transition: all 0.2s ease;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.4rem;
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 25px;
+            text-transform: capitalize;
+        }
+
+        .shift-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .input-field {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #737373;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            max-height: 500px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none;
+            box-sizing: border-box;
+            overflow-y: hidden;
+        }
+
+        textarea:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        input[type="text"] {
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            width: 140px;
+            text-align: center;
+        }
+
+        input[type="text"]:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        .copy-btn {
+            background: #e5e5e5;
+            border: none;
+            padding: 3px 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #404040;
+            transition: all 0.15s ease;
+        }
+
+        .copy-btn:hover {
+            background: #404040;
+            color: white;
+        }
+
+        .copy-btn.copied {
+            background: var(--success);
+            color: white;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+<div class="cipher-container">
+    <h1 id="modeTitle"></h1>
+
+    <div id="shiftGroup" class="shift-group hidden">
+        <label for="keyValue" style="margin: 0; color: #404040;">Seed Keyword:</label>
+        <input type="text" id="keyValue" value="EIGHTEEN">
+    </div>
+
+    <div class="input-field">
+        <label>
+            <span id="boxLabel">Type here...</span>
+            <button class="copy-btn" id="copyBtn">Copy & Clear</button>
+        </label>
+        <textarea id="streamBox" placeholder="Click here and type your message..." spellcheck="false" autocorrect="off" autocapitalize="none"></textarea>
+
+    </div>
+</div>
+
+<script>
+    let isEncoder = true;
+    
+    // The missing piece: This saves your real plaintext memory bank in Encoder mode
+    let hiddenPlaintext = ""; 
+
+    const modeTitle = document.getElementById('modeTitle');
+    const shiftGroup = document.getElementById('shiftGroup');
+    const keyValue = document.getElementById('keyValue');
+    const boxLabel = document.getElementById('boxLabel');
+    const streamBox = document.getElementById('streamBox');
+    const copyBtn = document.getElementById('copyBtn');
+
+    function autoResizeBox() {
+        streamBox.style.height = 'auto';
+        streamBox.style.height = streamBox.scrollHeight + 'px';
+    }
+
+    function getSeedFromString(str) {
+        let seed = 0;
+        const clean = str.toLowerCase().replace(/[^a-z]/g, '');
+        const target = clean.length > 0 ? clean : 'key';
+        for (let i = 0; i < target.length; i++) {
+            seed = (seed * 31 + target.charCodeAt(i)) % 2147483647;
+        }
+        return seed;
+    }
+
+    function getShiftForPosition(seed, index) {
+        let m = 2147483647; 
+        let a = 48271;
+        let c = 0;
+        let val = seed;
+        for (let i = 0; i <= index; i++) {
+            val = (a * val + c) % m;
+        }
+        return val % 26;
+    }
+
+    function shiftChar(char, shiftAmount, encodeMode) {
+        const code = char.charCodeAt(0);
+        const finalShift = encodeMode ? shiftAmount : (26 - shiftAmount) % 26;
+
+        if (code >= 65 && code <= 90) {
+            return String.fromCharCode(((code - 65 + finalShift) % 26) + 65);
+        } else if (code >= 97 && code <= 122) {
+            return String.fromCharCode(((code - 97 + finalShift) % 26) + 97);
+        }
+        return char;
+    }
+
+    // Processes a full message string using a non-repeating position seed track
+    function processTextBlock(text, seed, encodeMode) {
+        let result = '';
+        let letterIndex = 0;
+        for (let i = 0; i < text.length; i++) {
+            if (/[a-zA-Z]/.test(text[i])) {
+                const shiftAmount = getShiftForPosition(seed, letterIndex);
+                result += shiftChar(text[i], shiftAmount, encodeMode);
+                letterIndex++;
+            } else {
+                result += text[i];
+            }
+        }
+        return result;
+    }
+
+    // Refreshes the display text frame layout safely
+    function syncDisplay() {
+        const seed = getSeedFromString(keyValue.value);
+        if (isEncoder) {
+            // Re-render the display using the pristine hidden plain text array history
+            streamBox.value = processTextBlock(hiddenPlaintext, seed, true);
+        } else {
+            // Decoder interprets what is directly typed/pasted on screen as cipher content
+            hiddenPlaintext = processTextBlock(streamBox.value, seed, false);
+            streamBox.value = hiddenPlaintext;
+        }
+        autoResizeBox();
+    }
+
+    // Capture typing input steps safely before it gets corrupted on screen
+    streamBox.addEventListener('keypress', (event) => {
+        if (event.key === '`' || event.ctrlKey || event.metaKey || event.altKey) return;
+        
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            insertDataAtCursor("\n");
+            return;
+        }
+
+        event.preventDefault();
+        insertDataAtCursor(event.key);
+    });
+
+    function insertDataAtCursor(newChar) {
+        const cursorPosition = streamBox.selectionStart;
+        
+        if (isEncoder) {
+            // Insert your clean typed letter into the secret hidden plain track memory
+            hiddenPlaintext = hiddenPlaintext.slice(0, cursorPosition) + newChar + hiddenPlaintext.slice(streamBox.selectionEnd);
+            syncDisplay();
+        } else {
+            // Typing directly inside Decoder mode updates the cipher text strings directly
+            const oldCipher = streamBox.value;
+            streamBox.value = oldCipher.slice(0, cursorPosition) + newChar + oldCipher.slice(streamBox.selectionEnd);
+            syncDisplay();
+        }
+        
+        // Push view selection pointer forward safely
+        streamBox.selectionStart = streamBox.selectionEnd = cursorPosition + 1;
+        autoResizeBox();
+    }
+
+    // input monitoring catches Backspaces, Ctrl+Backspaces, deletions, and cuts cleanly
+    streamBox.addEventListener('input', () => {
+        const cursor = streamBox.selectionStart;
+        if (isEncoder) {
+            if (streamBox.value === "") {
+                hiddenPlaintext = "";
+            } else {
+                // Adjust your hidden memory tracker lengths based on structural text box changes
+                const lengthDifference = hiddenPlaintext.length - streamBox.value.length;
+                if (lengthDifference > 0) {
+                    hiddenPlaintext = hiddenPlaintext.slice(0, cursor) + hiddenPlaintext.slice(cursor + lengthDifference);
+                }
+            }
+            syncDisplay();
+            streamBox.selectionStart = streamBox.selectionEnd = cursor;
+        } else {
+            syncDisplay();
+            streamBox.selectionStart = streamBox.selectionEnd = cursor;
+        }
+    });
+
+    // Hidden backtick hotkey logic toggle configurations (`)
+    window.addEventListener('keydown', (event) => {
+        if (event.key === '`') {
+            event.preventDefault();
+            isEncoder = !isEncoder;
+            const seed = getSeedFromString(keyValue.value);
+
+            if (isEncoder) {
+                modeTitle.innerText = "";
+                boxLabel.innerText = "Type here...";
+                shiftGroup.classList.add('hidden');
+                streamBox.value = processTextBlock(hiddenPlaintext, seed, true);
+            } else {
+                modeTitle.innerText = "Running Decoder Mode";
+
+
+
+boxLabel.innerText = "Paste encoded text or type to decode...";
+shiftGroup.classList.remove('hidden');
+streamBox.value = hiddenPlaintext; // Reveals the clean readable plain track text layout
+}
+autoResizeBox();
+}
+});
+
+
+
+
+streamBox.addEventListener('keyup', autoResizeBox);
+keyValue.addEventListener('input', syncDisplay);
+
+// Clipboard Copy & Layout Workspace Clear
+copyBtn.addEventListener('click', () => {
+if (!streamBox.value) return;
+
+
+
+
+navigator.clipboard.writeText(streamBox.value).then(() => {
+const originalText = copyBtn.textContent;
+copyBtn.textContent = "Copied!";
+copyBtn.classList.add('copied');
+
+
+streamBox.value = '';
+hiddenPlaintext = '';
+autoResizeBox();
+
+
+
+
+
+setTimeout(() => {
+copyBtn.textContent = originalText;
+copyBtn.classList.remove('copied');
+}, 1200);
+});
+});
+
+
+
+</script>
+
+</body>
+</html>

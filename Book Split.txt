@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instant Text File Splitter & Archive</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .btn {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .btn-download {
+            background-color: #2ecc71;
+        }
+        .btn-download:hover {
+            background-color: #27ae60;
+        }
+        .btn-zip {
+            background-color: #9b59b6;
+        }
+        .btn-zip:hover {
+            background-color: #8e44ad;
+        }
+        #resultsSection {
+            margin-top: 30px;
+            display: none;
+            border-top: 2px solid #eee;
+            padding-top: 20px;
+        }
+        .chapter-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            background: #fafafa;
+            margin-bottom: 15px;
+        }
+        .chapter-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .chapter-item:last-child {
+            border-bottom: none;
+        }
+        .chapter-item input[type="checkbox"] {
+            margin-right: 12px;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        .chapter-item label {
+            margin: 0;
+            font-weight: normal;
+            cursor: pointer;
+            flex-grow: 1;
+        }
+        .controls {
+            margin-bottom: 15px;
+        }
+        .controls button {
+            background: #e0e0e0;
+            border: none;
+            padding: 5px 10px;
+            margin-right: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .controls button:hover {
+            background: #d0d0d0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>ePub Text File Splitter</h2>
+    <p>Splits texts offline instantly. No network connections required.</p>
+
+    <div class="form-group">
+        <label for="fileInput">1. Upload Text File:</label>
+        <input type="file" id="fileInput" accept=".txt">
+    </div>
+
+    <div class="form-group">
+        <label for="keywordInput">2. Split Keyword (e.g., "Chapter" or "Book"):</label>
+        <input type="text" id="keywordInput" placeholder="Enter keyword case-sensitive...">
+    </div>
+
+    <button class="btn" onclick="processTextFile()">Process & Generate List</button>
+
+    <div id="resultsSection">
+        <h3>Generated Chapters / Parts</h3>
+        
+        <div class="controls">
+            <button onclick="toggleAll(true)">Select All</button>
+            <button onclick="toggleAll(false)">Deselect All</button>
+        </div>
+
+        <div class="chapter-list" id="chapterList"></div>
+
+        <div class="button-group">
+            <button class="btn btn-download" onclick="downloadSelected()">Download Separate Files</button>
+            <button class="btn btn-zip" onclick="downloadAsTarArchive()">Download Combined Archive (.tar)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let splitFilesMemory = [];
+
+function processTextFile() {
+    const fileInput = document.getElementById('fileInput');
+    const keyword = document.getElementById('keywordInput').value;
+    const resultsSection = document.getElementById('resultsSection');
+    const chapterList = document.getElementById('chapterList');
+
+    if (!fileInput.files.length) {
+        alert('Please upload a text file first.');
+        return;
+    }
+    if (!keyword) {
+        alert('Please enter a split keyword.');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        const fullText = e.target.result;
+        const segments = fullText.split(keyword);
+        
+        if (segments.length <= 1) {
+            alert('Keyword not found in the text. No splits made.');
+            resultsSection.style.display = 'none';
+            return;
+        }
+
+        splitFilesMemory = [];
+        chapterList.innerHTML = '';
+        let fileCount = 0;
+
+        segments.forEach((segment, index) => {
+            // Skip the first segment if it's completely empty space
+            if (index === 0 && segment.trim() === "") return;
+
+            // Put the keyword back at the beginning of the text block
+            const fileContent = (index === 0) ? segment : keyword + segment;
+            fileCount++;
+            
+            // --- NEW FILENAME LOGIC ---
+            let fileName = "";
+            
+            if (index === 0) {
+                // If there is text before the very first keyword, name it "Introduction" or "Preface"
+                fileName = `Part_${String(fileCount).padStart(3, '0')}_Intro.txt`;
+            } else {
+                // Take the first 30 characters immediately following your keyword
+                let titleSnippet = segment.trim().substring(0, 30);
+                
+                // Clean up formatting: force everything onto one line and replace spaces with underscores
+                titleSnippet = titleSnippet.replace(/\s+/g, '_');
+                
+                // Safe-filtering: strip out characters that Windows/Mac ban in file names (\ / : * ? " < > |)
+                titleSnippet = titleSnippet.replace(/[\/\\:\*\?"<>\|]/g, '');
+                
+                // Construct file name: Keyword + cleaned snippet (e.g., "Chapter_1_The_Start.txt")
+                fileName = `${keyword.trim()}_${titleSnippet}.txt`;
+            }
+            // ---------------------------
+            
+            // Create preview text for the on-screen checklist text
+            const cleanText = segment.trim().replace(/\s+/g, ' ');
+            const previewText = cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : '');
+            const displayLabel = `${fileName} — Preview: "${previewText}"`;
+
+            splitFilesMemory.push({
+                name: fileName,
+                content: fileContent
+            });
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'chapter-item';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `chk_${index}`;
+            checkbox.value = fileCount - 1; 
+            checkbox.checked = true; 
+
+            const label = document.createElement('label');
+            label.htmlFor = `chk_${index}`;
+            label.innerText = displayLabel;
+
+            itemDiv.appendChild(checkbox);
+            itemDiv.appendChild(label);
+            chapterList.appendChild(itemDiv);
+        });
+
+        resultsSection.style.display = 'block';
+    };
+
+    reader.readAsText(file);
+}
+
+
+function toggleAll(checkedState) {
+    const checkboxes = document.querySelectorAll('#chapterList input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = checkedState);
+}
+
+function getSelectedFiles() {
+    const checkboxes = document.querySelectorAll('#chapterList input[type="checkbox"]:checked');
+    const selected = [];
+    checkboxes.forEach((cb) => {
+        const fileIndex = parseInt(cb.value);
+        selected.push(splitFilesMemory[fileIndex]);
+    });
+    return selected;
+}
+
+function downloadSelected() {
+    const selectedFiles = getSelectedFiles();
+    if (selectedFiles.length === 0) {
+        alert('Please select at least one file to download.');
+        return;
+    }
+
+    selectedFiles.forEach((fileData) => {
+        const blob = new Blob([fileData.content], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileData.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+}
+
+// Custom 100% native client-side TAR encoder (Zero external scripts)
+function downloadAsTarArchive() {
+    const selectedFiles = getSelectedFiles();
+    if (selectedFiles.length === 0) {
+        alert('Please select at least one file to bundle.');
+        return;
+    }
+
+    const encoder = new TextEncoder();
+    const chunks = [];
+
+    selectedFiles.forEach(file => {
+        const fileData = encoder.encode(file.content);
+        
+        // Build standard 512-byte header block manually
+        const header = new Uint8Array(512);
+        
+        // 1. Filename (Offset 0, Max length 100)
+        for (let i = 0; i < Math.min(file.name.length, 100); i++) {
+            header[i] = file.name.charCodeAt(i);
+        }
+        
+        // 2. File Mode (Offset 100, Octal "0000644 \0")
+        header.set(encoder.encode("0000644\0"), 100);
+        
+        // 3. File Size in octal string padded (Offset 124, 11 bytes + space/null)
+        const sizeStr = fileData.length.toString(8).padStart(11, '0') + ' ';
+        header.set(encoder.encode(sizeStr), 124);
+        
+        // 4. File modification dummy time (Offset 136)
+        header.set(encoder.encode("00000000000\0"), 136);
+
+        // 5. Type Flag '0' for normal file (Offset 156)
+        header[156] = 48; 
+
+        // Calculate Header Checksum (Offset 148, size 8)
+        header.set(encoder.encode("        "), 148); // Pad with spaces for counting
+        let checksum = 0;
+        for (let i = 0; i < 512; i++) {
+            checksum += header[i];
+        }
+        const checksumStr = checksum.toString(8).padStart(6, '0') + '\0 ';
+        header.set(encoder.encode(checksumStr), 148);
+
+        // Push Header
+        chunks.push(header);
+        
+        // Push File Data Payload
+        chunks.push(fileData);
+        
+        // Pad data to match explicit 512-byte boundary requirements
+        const remainder = fileData.length % 512;
+        if (remainder !== 0) {
+            chunks.push(new Uint8Array(512 - remainder));
+
+
+
+
+
+}
+});
+
+// End of TAR archive marker (Two 512-byte blocks of null characters)
+
+chunks.push(new Uint8Array(1024));
+
+// Compile parts and download
+const blob = new Blob(chunks, { type: 'application/x-tar' });
+const link = document.createElement('a');
+link.href = URL.createObjectURL(blob);
+link.download = "Split_Chapters.tar";
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+}
+
+
+
+
+
+
+</script>
+
+</body>
+</html>

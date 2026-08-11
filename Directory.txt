@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Google Workspace</title>
+    <style>
+        /* --- NEW LIGHT THEME OVERRIDES --- */        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #121212; 
+            color: #e0e0e0; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            height: 95vh; 
+        }
+        .controls { 
+            background: #1e1e1e; 
+            padding: 10px; 
+            border-radius: 8px; 
+            margin-bottom: 15px; 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            flex-wrap: wrap;
+        }
+        .controls input {
+            flex: 2;
+            min-width: 100px;
+            background: #2d2d2d; 
+            border: 1px solid #444; 
+            color: #fff; 
+            padding: 5px 10px; 
+            border-radius: 4px; 
+            font-size: 13px;
+        }
+        .controls input:focus { border-color: #007acc; outline: none; }
+        
+        .workspace { 
+            display: flex; 
+            gap: 15px; 
+            flex: 1; 
+            min-height: 0; 
+        }
+        .panel { 
+            background: #1e1e1e; 
+            border-radius: 8px; 
+            padding: 15px; 
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #sidebar { 
+            flex: 1; 
+            min-width: 250px; 
+            max-width: 400px;
+        }
+        #sidebar.collapsed, .zen-hidden { 
+            display: none !important; 
+        }
+        #viewer { flex: 2; }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+        .panel-header h3 { margin: 0; }
+        
+        .tree-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        
+        ul { list-style: none; padding-left: 8px; margin: 0; }
+        .root-ul { padding-left: 0; }
+        li { 
+            padding: 2px 4px; 
+            border-radius: 3px; 
+            display: flex; 
+            flex-direction: column;
+            font-size: 12px; 
+        }
+        .item-label {
+            cursor: pointer;
+            display: inline-block;
+            padding: 1px 4px; 
+            border-radius: 3px;
+            white-space: nowrap; 
+            overflow: hidden;
+            text-overflow: ellipsis; 
+        }
+        .item-label:hover { background: #2a2a2a; }
+        .item-label.active { background: #004b80; color: #fff; }
+        .file-item { color: #4fc1ff; }
+        .dir-item { color: #cca700; font-weight: bold; }
+        
+        .view-content-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            background: #151515;
+            border: 1px solid #2d2d2d;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        pre { 
+            margin: 0; 
+            font-family: Consolas, "Courier New", monospace; 
+            font-size: 13px; 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            color: #d4d4d4; 
+            display: block;
+        }
+        .error { color: #f44336; font-weight: bold; }
+        .loading { color: #aaa; font-style: italic; }
+        
+        /* UNIFIED BUTTON SCHEME (Dark Mode Defaults) */
+        button, .action-btn {
+            background: #333;
+            color: #fff;
+            padding: 5px 12px;
+            border-radius: 4px; 
+            font-size: 13px; 
+            font-weight: bold; 
+            border: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        button:hover, .action-btn:hover { background: #444; }
+        
+        /* UNIFIED ACCENT BLUE OVERRIDES (Turns blue accents off to match utility styles) */
+        .btn-accent, #copyCodeBtn, .next-btn {
+            background: #333; /* Matches standard utility gray button colors */
+        }
+        .btn-accent:hover, #copyCodeBtn:hover, .next-btn:hover {
+            background: #444;
+        }
+
+        /* Adjust matching values inside your --- COMPLETE LIGHT THEME OVERRIDES --- section too */
+        body.light-theme .btn-accent, 
+        body.light-theme #copyCodeBtn, 
+        body.light-theme .next-btn {
+            background: #e4e7ed !important; /* Matches light mode utility gray style */
+            color: #333333 !important;
+            border: 1px solid #dcdfe6 !important;
+        }
+        body.light-theme .btn-accent:hover, 
+        body.light-theme #copyCodeBtn:hover, 
+        body.light-theme .next-btn:hover { 
+            background: #dcdfe6 !important; 
+        }
+
+        .btn-accent:hover, #copyCodeBtn:hover, .next-btn:hover {
+            background: #005999;
+        }
+        
+        /* Specific accent color for Green copy paths - TURNED UNIFIED GRAY */
+        .btn-green {
+            background: #333; /* Matches standard utility gray button color */
+            color: #fff;
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn-green:hover { background: #444; }
+
+        /* Add this single line inside your --- COMPLETE LIGHT THEME OVERRIDES --- section */
+        body.light-theme .btn-green { 
+            background: #e4e7ed !important; /* Matches light mode utility gray style */
+            color: #333333 !important; 
+            border: 1px solid #dcdfe6 !important; 
+        }
+        body.light-theme .btn-green:hover { 
+            background: #dcdfe6 !important; 
+        }
+        .action-btn-sm {
+            font-size: 11px;
+            padding: 3px 6px;
+        }
+        .nav-large {
+            flex: 1;
+            padding: 7px;
+            font-size: 13px;
+        }
+        .volume-container { position: relative; display: inline-block; }
+        .volume-popup {
+            display: none; position: absolute; top: 25px; left: 50%; transform: translateX(-50%);
+            background: #252526; border: 1px solid #444; padding: 8px 10px; border-radius: 6px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 100; align-items: center;
+        }
+        .volume-popup.show { display: flex; }
+        .bottom-nav-row { display: flex; gap: 10px; margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; }
+
+        /* --- COMPLETE LIGHT THEME OVERRIDES --- */
+        body.light-theme {
+            background: #f0f2f5;
+            color: #1a1a1a;
+        }
+        body.light-theme .controls, body.light-theme .panel {
+            background: #ffffff;
+            border: 1px solid #dcdfe6;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+        }
+        body.light-theme .controls input {
+            background: #ffffff;
+            border: 1px solid #dcdfe6;
+            color: #333333;
+        }
+        body.light-theme .controls input:focus { border-color: #007acc; }
+        
+        /* Light mode variations for background/utility buttons */
+        body.light-theme button, body.light-theme .action-btn {
+            background: #e4e7ed;
+            color: #333333;
+            border: 1px solid #dcdfe6;
+        }
+        body.light-theme button:hover, body.light-theme .action-btn:hover { background: #dcdfe6; }
+        
+        /* Preserve functional color roles in light mode */
+        body.light-theme .btn-accent, body.light-theme #copyCodeBtn, body.light-theme .next-btn {
+            background: #007acc;
+            color: #ffffff;
+            border: none;
+        }
+        body.light-theme .btn-accent:hover, body.light-theme #copyCodeBtn:hover, body.light-theme .next-btn:hover { background: #005999; }
+        body.light-theme .btn-green { background: #28a745; color: white; border: none; }
+        body.light-theme .btn-green:hover { background: #218838; }
+        body.light-theme .panel-header, body.light-theme .bottom-nav-row { border-color: #e4e7ed !important; }
+        body.light-theme .item-label:hover { background: #f5f7fa; }
+        body.light-theme .item-label.active { background: #007acc; color: #ffffff; }
+        body.light-theme .file-item { color: #0056b3; }
+        body.light-theme .dir-item { color: #b17d00; }
+        body.light-theme .view-content-wrapper, body.light-theme #rawDisplay {
+            background: #fafafa !important;
+            border: 1px solid #e4e7ed !important;
+        }
+        body.light-theme pre, body.light-theme #rawTextOutput { color: #24292e; }
+        body.light-theme .volume-popup { background: #ffffff; border: 1px solid #dcdfe6; }
+        body.light-theme .loading { color: #666666; }
+
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <input type="password" id="user" placeholder="Username">
+        <input type="password" id="repo" placeholder="Repository">
+        <input type="text" id="branch" placeholder="Branch / Commit Hash">
+        <button onclick="loadDirectory()" class="btn-accent">Explore Directory</button>
+        <button id="toggleThemeBtn" onclick="toggleTheme()">🌓 Toggle Theme</button>
+        <button id="toggleSidebarBtn" onclick="toggleSidebar()">📁 Toggle Sidebar</button>
+    </div>
+
+    <div class="workspace">
+        <!-- Sidebar Panel -->
+        <div id="sidebar" class="panel">
+            <div class="panel-header">
+                <h3>🗂️ Project Files</h3>
+            </div>
+            <div class="tree-container" id="dirOutput">
+                Enter repository details above to view the directory tree.
+            </div>
+            <button id="copyPathBtn" class="btn-green" onclick="copyAllPaths()" style="display: none;">📋 Copy All Paths</button>
+        </div>
+        
+        <!-- File Viewer Panel -->
+        <div id="viewer" class="panel">
+            <div id="viewerHeader" class="panel-header">
+                <h3>📄 File Content Viewer</h3>
+                <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                    
+                    <div class="volume-container">
+                        <button onclick="toggleVolumePopup(event)" class="action-btn action-btn-sm">🔊 Volume</button>
+                        <div id="volumePopup" class="volume-popup">
+                            <input type="range" id="globalVolumeSlider" min="0" max="1" step="0.05" value="0.25">
+                        </div>
+                    </div>
+
+                    <label style="font-size: 11px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 3px; margin-right: 5px;">
+                        <input type="checkbox" id="autoPlayToggle" style="flex: none; min-width: auto; cursor: pointer;"> Auto Play
+                    </label>
+                    <label style="font-size: 11px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 3px; margin-right: 5px;">
+                        <input type="checkbox" id="autoNextToggle" style="flex: none; min-width: auto; cursor: pointer;"> Auto Next
+                    </label>
+                    <!-- ... volume and auto-play controls ... -->
+                    <label style="font-size: 11px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 3px; margin-right: 5px;">
+                        <input type="checkbox" id="shuffleToggle" style="flex: none; min-width: auto; cursor: pointer;"> Shuffle
+                    </label>
+                    
+                    <!-- ADDED: Replay / Loop Checkbox -->
+                    <label style="font-size: 11px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 3px; margin-right: 10px;">
+                        <input type="checkbox" id="replayToggle" style="flex: none; min-width: auto; cursor: pointer;"> Replay
+                    </label>
+                    
+                    <label style="font-size: 11px; color: #aaa; margin-right: 10px; cursor: pointer; display: flex; align-items: center; gap: 3px;">
+                        <input type="checkbox" id="rawTextToggle" onchange="toggleRawView()" style="flex: none; min-width: auto; cursor: pointer;"> Show Raw
+                    </label>
+                    
+                    <button id="copyCodeBtn" onclick="copyCode()" class="action-btn action-btn-sm">📋 Copy</button>
+                </div>
+            </div>
+
+            
+            <div id="mediaDisplay" class="view-content-wrapper" style="display: block;">
+                <pre id="fileOutput">Click on a file from the sidebar to inspect its content here...</pre>
+            </div>
+            <div id="rawDisplay" class="view-content-wrapper" style="display: none;">
+                <pre id="rawTextOutput"></pre>
+            </div>
+
+            <div class="bottom-nav-row">
+                <button onclick="navigateFile(-1)" class="action-btn nav-large">⏮️ Previous File</button>
+                <button onclick="toggleZenMode()" class="action-btn nav-large">👁️ Toggle Controls</button>
+                <button onclick="navigateFile(1)" class="action-btn nav-large next-btn">Next File ⏭️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ensure your JavaScript remains at the very bottom right here -->
+
+    <script>
+// Tracking global variables for navigation setup
+        let allFilePaths = []; 
+        let currentFileIndex = -1;
+
+        async function loadDirectory() {
+            const user = document.getElementById('user').value.trim();
+            const repo = document.getElementById('repo').value.trim();
+            const branch = document.getElementById('branch').value.trim();
+            const dirOutput = document.getElementById('dirOutput');
+            const copyPathBtn = document.getElementById('copyPathBtn');
+
+            if (!user || !repo || !branch) {
+                alert('Please fill out Username, Password, and Path fields.');
+                return;
+            }
+
+            dirOutput.innerHTML = '<span class="loading">Loading file structure...</span>';
+            
+            // Reset track data states on new repo initialization
+            copyPathBtn.style.display = 'none';
+            allFilePaths = [];
+            currentFileIndex = -1;
+
+            const url = `https://data.jsdelivr.com/v1/packages/gh/${user}/${repo}@${branch}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Server returned HTTP ${response.status}`);
+                const data = await response.json();
+
+                if (!data.files || data.files.length === 0) {
+                    dirOutput.innerHTML = '<span class="error">No files found for this branch.</span>';
+                    return;
+                }
+
+                dirOutput.innerHTML = '';
+                const rootUl = document.createElement('ul');
+                rootUl.className = 'root-ul';
+                
+                buildTreeLayout(data.files, rootUl, "");
+                dirOutput.appendChild(rootUl);
+                
+                // Show path tracking export tool if records exist
+                if(allFilePaths.length > 0) {
+                    copyPathBtn.style.display = 'block';
+                }
+
+            } catch (err) {
+                dirOutput.innerHTML = `<span class="error">Failed to fetch directory: ${err.message}</span>`;
+            }
+        }
+
+        function buildTreeLayout(files, parentElement, currentPath) {
+            files.sort((a, b) => (b.type === 'directory') - (a.type === 'directory'));
+
+            files.forEach(item => {
+                const li = document.createElement('li');
+                const fullPath = currentPath + (currentPath ? '/' : '') + item.name;
+                
+                if (item.type === 'directory') {
+                    const label = document.createElement('span');
+                    label.className = 'item-label dir-item';
+                    label.innerHTML = `📁 ${item.name}/`;
+                    li.appendChild(label);
+                    
+                    const childUl = document.createElement('ul');
+                    li.appendChild(childUl);
+                    
+                    if (item.files) {
+                        buildTreeLayout(item.files, childUl, fullPath);
+                    }
+                } else {
+                    const label = document.createElement('span');
+                    label.className = 'item-label file-item';
+                    
+                    // Assign order indexes to files for linear list navigation matching
+                    const localIndex = allFilePaths.length;
+                    label.id = `file-${localIndex}`;
+                    label.innerHTML = `📄 ${item.name}`;
+                    
+                    allFilePaths.push(fullPath);
+                    
+                    label.onclick = () => {
+                        currentFileIndex = localIndex;
+                        updateActiveHighlight();
+                        readFileContent(fullPath);
+                    };
+                    li.appendChild(label);
+                }
+                parentElement.appendChild(li);
+            });
+        }
+
+        // Global storage variable to preserve raw text across view flips
+        let activeRawTextPayload = "";
+
+        async function readFileContent(filePath) {
+            const user = document.getElementById('user').value.trim();
+            const repo = document.getElementById('repo').value.trim();
+            const branch = document.getElementById('branch').value.trim();
+            const fileOutput = document.getElementById('fileOutput');
+            const rawTextOutput = document.getElementById('rawTextOutput');
+
+            fileOutput.className = 'loading';
+            fileOutput.innerText = `Streaming raw bytes for: ${filePath}...`;
+            rawTextOutput.innerText = "Loading raw string details...";
+            activeRawTextPayload = "";
+
+            const url = `https://cdn.jsdelivr.net/gh/${user}/${repo}@${branch}/${filePath}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                let text = await response.text();
+                
+                activeRawTextPayload = text; 
+                fileOutput.className = '';
+                rawTextOutput.innerText = text;
+                
+                const cleanBase64 = text.replace(/\s/g, '');
+                const signature = cleanBase64.substring(0, 8);
+                
+                let isImage = false;
+                let isAudio = false;
+                let mimeType = '';
+
+                if (signature.startsWith('iVBOR')) { isImage = true; mimeType = 'image/png'; }
+                else if (signature.startsWith('/9j/4')) { isImage = true; mimeType = 'image/jpeg'; }
+                else if (signature.startsWith('R0lGO')) { isImage = true; mimeType = 'image/gif'; }
+                else if (signature.startsWith('//uQ') || signature.startsWith('SUQz')) { isAudio = true; mimeType = 'audio/mpeg'; }
+
+                if (isImage) {
+                    fileOutput.innerHTML = `<img src="data:${mimeType};base64,${cleanBase64}" style="max-width: 100%; max-height: 70vh; border-radius: 4px; display: block; margin: auto;">`;
+                } 
+                else if (isAudio) {
+                    // ADDED: Added tracking IDs and native media listeners
+                    fileOutput.innerHTML = `
+                        <div style="padding: 20px; text-align: center;">
+                            <p style="margin-bottom: 10px; color: #aaa;">🎵 Base64 Audio Playback</p>
+                            <audio id="activeAudioPlayer" controls src="data:${mimeType};base64,${cleanBase64}" style="width: 100%; max-width: 400px;"></audio>
+                        </div>`;
+                    
+                    setupMediaAutomationListeners("activeAudioPlayer");
+                } 
+                else {
+                    fileOutput.innerText = text;
+                }
+                
+            } catch (err) {
+                fileOutput.className = 'error';
+                fileOutput.innerText = `Failed to process text content: ${err.message}`;
+                rawTextOutput.innerText = `Error: ${err.message}`;
+            }
+        }
+
+        // NEW LOGIC: View Flip Mechanics Switching Layout Contexts
+        function toggleRawView() {
+            const mediaDisplay = document.getElementById('mediaDisplay');
+            const rawDisplay = document.getElementById('rawDisplay');
+            const isChecked = document.getElementById('rawTextToggle').checked;
+
+            if (isChecked) {
+                mediaDisplay.style.display = 'none';
+                rawDisplay.style.display = 'block';
+            } else {
+                mediaDisplay.style.display = 'block';
+                rawDisplay.style.display = 'none';
+            }
+        }
+
+        // UPDATED: Automatically handles standard scrolling, smart shuffles, and loops
+        function navigateFile(direction) {
+            if (allFilePaths.length === 0) return;
+            
+            const isShuffleActive = document.getElementById('shuffleToggle').checked;
+
+            if (isShuffleActive && allFilePaths.length > 1) {
+                // Pick a completely random index that isn't the current one
+                let randomIndex = currentFileIndex;
+                while (randomIndex === currentFileIndex) {
+                    randomIndex = Math.floor(Math.random() * allFilePaths.length);
+                }
+                currentFileIndex = randomIndex;
+            } else {
+                // Standard index progression loops
+                currentFileIndex += direction;
+                if (currentFileIndex >= allFilePaths.length) currentFileIndex = 0;
+                if (currentFileIndex < 0) currentFileIndex = allFilePaths.length - 1;
+            }
+            
+            updateActiveHighlight();
+            const targetPath = allFilePaths[currentFileIndex];
+            readFileContent(targetPath);
+            
+            document.getElementById(`file-${currentFileIndex}`)?.scrollIntoView({ block: 'nearest' });
+        }
+
+        // NEW AUTOMATION CONNECTOR ENGINE
+        function setupMediaAutomationListeners(playerId) {
+            const player = document.getElementById(playerId);
+            const slider = document.getElementById('globalVolumeSlider');
+            const replayBox = document.getElementById('replayToggle');
+            if (!player || !slider || !replayBox) return;
+
+            // 1. Instantly set the player volume to match the current slider value
+            player.volume = slider.value;
+
+            // 2. Listen for slider movement to dynamically adjust the audio while playing
+            slider.oninput = function() {
+                player.volume = slider.value;
+            };
+
+            // 3. NEW LOOPER LOGIC: Force browser native hardware looping if checked
+            player.loop = replayBox.checked;
+            
+            // Listen for checkbox changes dynamically while the track is active
+            replayBox.onchange = function() {
+                player.loop = replayBox.checked;
+            };
+
+            // Trigger A: If Auto Play is checked, trigger play instantly when loading ends
+            const shouldAutoPlay = document.getElementById('autoPlayToggle').checked;
+            if (shouldAutoPlay) {
+                player.play().catch(err => console.log("Auto-play blocked by browser security. Click interactively first."));
+            }
+
+            // Trigger B: If media ends, trigger Auto Next (Native loop bypasses this when active!)
+            player.onended = function() {
+                const shouldAutoNext = document.getElementById('autoNextToggle').checked;
+                // Since player.loop loops natively, onended will ONLY fire if Replay is unchecked
+                if (shouldAutoNext) {
+                    navigateFile(1); 
+                }
+            };
+        }
+
+        // UPDATED: Automatically grabs raw code background text even if displaying media
+        function copyCode() {
+            if (!activeRawTextPayload) return;
+            navigator.clipboard.writeText(activeRawTextPayload).then(() => {
+                const btn = document.getElementById('copyCodeBtn');
+                btn.innerText = '✅ Copied Raw!';
+                setTimeout(() => btn.innerText = '📋 Copy Content', 1500);
+            });
+        }
+
+        function updateActiveHighlight() {
+            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`file-${currentFileIndex}`)?.classList.add('active');
+        }
+
+        // NEW FEATURE: Clean view frame collapse engine
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        // NEW FEATURE: Bulk copy text strings
+        function copyAllPaths() {
+            if (allFilePaths.length === 0) return;
+            const pathText = allFilePaths.join('\n');
+            navigator.clipboard.writeText(pathText).then(() => {
+                const btn = document.getElementById('copyPathBtn');
+                const oldText = btn.innerText;
+                btn.innerText = '✅ Paths Copied!';
+                setTimeout(() => btn.innerText = oldText, 1500);
+            });
+        }
+
+        // Toggle displaying the volume slider overlay element
+        function toggleVolumePopup(event) {
+            event.stopPropagation(); // Stops immediate document auto-hiding triggers
+            document.getElementById('volumePopup').classList.toggle('show');
+        }
+
+        // Global click observer to auto-close the volume menu when clicking elsewhere
+        document.addEventListener('click', function(event) {
+            const popup = document.getElementById('volumePopup');
+            const container = document.querySelector('.volume-container');
+            
+            // If the element menu is open and click was outside, close it cleanly
+            if (popup && popup.classList.contains('show') && !container.contains(event.target)) {
+                popup.classList.remove('show');
+            }
+        });
+
+        // AUTOMATION: Detect window minimize or tab switches to auto-pause media
+        document.addEventListener("visibilitychange", function() {
+            // Checks if the user has navigated away from the document frame
+            if (document.hidden) {
+                // Select the active player element if it is currently rendered on screen
+                const activePlayer = document.getElementById("activeAudioPlayer");
+                if (activePlayer && !activePlayer.paused) {
+                    activePlayer.pause();
+                    console.log("Tab focus lost: Media paused automatically.");
+                }
+            }
+        });
+
+        // NEW FEATURE: Toggle Zen Mode to hide top input fields and reader headers
+        function toggleZenMode() {
+            // Find the main controls input panel at the top of the body
+            const topControls = document.querySelector('.controls');
+            // Find the viewer layout header tracking element
+            const viewerHeader = document.getElementById('viewerHeader');
+            
+            if (topControls && viewerHeader) {
+                topControls.classList.toggle('zen-hidden');
+                viewerHeader.classList.toggle('zen-hidden');
+            }
+        }
+
+        // NEW FEATURE: Toggle Theme Engine between Dark and Light Layouts
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+        }
+
+    </script>
+</body>
+</html>

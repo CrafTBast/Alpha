@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Bloat-Free RC4 Compiler</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 650px; margin: 0 auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        textarea { width: 100%; font-family: monospace; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; resize: vertical; }
+        input[type="text"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px; }
+        
+        /* Drag and Drop Zone Styles */
+        .drop-zone { border: 2px dashed #007bff; border-radius: 6px; padding: 25px; text-align: center; background: #f8fafd; cursor: pointer; margin-bottom: 15px; transition: background 0.2s; }
+        .drop-zone.dragover { background: #e6f0fa; border-color: #0056b3; }
+        .drop-zone p { margin: 0; font-size: 14px; color: #555; }
+        .drop-zone strong { color: #007bff; }
+        
+        .btn-crypt { padding: 12px 20px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; background-color: #007bff; color: white; margin-bottom: 15px; }
+        .btn-crypt:hover { background-color: #0056b3; }
+        
+        .output-actions { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-action { flex: 1; padding: 10px; font-size: 13px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-copy { background-color: #28a745; }
+        .btn-copy:hover { background-color: #218838; }
+        .btn-dl { background-color: #17a2b8; }
+        .btn-dl:hover { background-color: #138496; }
+        
+        .status-msg { text-align: center; color: #28a745; font-weight: bold; margin-top: 10px; display: block; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Advanced RC4 Compiler & Gate Generator</h2>
+    
+    <label><strong>1. Encryption Password Key:</strong></label><br>
+    <input type="text" id="cipherKey" placeholder="Enter password for the gate..."><br>
+
+    <label><strong>2. Input Your Original Clean Script:</strong></label>
+    <!-- Drag & Drop Zone -->
+    <div id="dropZone" class="drop-zone">
+        <p>Drop your script file here, click to browse, or paste code below.</p>
+        <p><strong id="file-status">No file selected</strong></p>
+        <input type="file" id="fileInput" accept=".html,.js,.css,.txt" style="display: none;">
+    </div>
+    
+    <!-- Text Area Input -->
+    <textarea id="inputCode" rows="8" placeholder="Or paste HTML, CSS, or JS code here..."></textarea>
+    <br><br>
+    
+    <button class="btn-crypt" onclick="compileWorkflow()">Compile & Process Code</button>
+    <span id="status-message" class="status-msg hidden">✓ Action Complete!</span>
+
+    <!-- Output Section Structure -->
+    <div id="outputContainer" class="hidden">
+        <h3>Compiled HTML Code Output:</h3>
+        <textarea id="outputResult" rows="8" readonly placeholder="Output string will generate here..."></textarea>
+        <div class="output-actions">
+            <button class="btn-action btn-copy" onclick="copyToClipboard()">Copy to Clipboard</button>
+            <button class="btn-action btn-dl" onclick="downloadHTML()">Download File</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let globalActiveCode = ""; 
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const inputCodeTextarea = document.getElementById('inputCode');
+    const fileStatus = document.getElementById('file-status');
+
+    // Handle click to browse files
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // Sync input when file is selected via browser menu
+    fileInput.addEventListener('change', (e) => handleFileSelection(e.target.files[0]));
+
+    // Drag and Drop Event Listeners
+    dropZone.addEventListener('dragover', (e) => { 
+        e.preventDefault(); 
+        dropZone.classList.add('dragover'); 
+    });
+    
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            handleFileSelection(e.dataTransfer.files[0]);
+        }
+    });
+
+    function handleFileSelection(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            globalActiveCode = e.target.result;
+            inputCodeTextarea.value = ""; // Clear text box to avoid memory redundancy
+            fileStatus.textContent = `Attached: ${file.name} (${Math.round(file.size / 1024)} KB)`;
+        };
+        reader.readAsText(file);
+    }
+
+    // Pure RC4 Encryption Loop
+    function rc4Cipher(key, str) {
+        let s = [], j = 0, x, res = '';
+        for (let i = 0; i < 256; i++) s[i] = i;
+        for (let i = 0; i < 256; i++) {
+            j = (j + s[i] + key.charCodeAt(i % key.length)) % 256;
+            x = s[i]; s[i] = s[j]; s[j] = x;
+        }
+        let i = 0; j = 0;
+        for (let y = 0; y < str.length; y++) {
+            i = (i + 1) % 256; 
+            j = (j + s[i]) % 256;
+            x = s[i]; s[i] = s[j]; s[j] = x;
+            res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]);
+        }
+        return res;
+    }
+
+    function compileWorkflow() {
+        const key = document.getElementById('cipherKey').value;
+        // Read text area if no file data was dragged/loaded earlier
+        const targetRawCode = globalActiveCode.trim() ? globalActiveCode : inputCodeTextarea.value;
+
+        if (!key) return alert("Please enter an encryption key!");
+        if (!targetRawCode.trim()) return alert("Please paste code or drop a script file!");
+
+        const safeString = unescape(encodeURIComponent(targetRawCode));
+        const encryptedBinary = rc4Cipher(key, safeString);
+        const finalPayload = btoa(encryptedBinary);
+
+        const standaloneHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Gate</title>
+    <style>
+        .login-overlay { font-family: Arial, sans-serif; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: #f4f4f9 !important; display: flex !important; justify-content: center !important; align-items: center !important; z-index: 999999999 !important; }
+        .login-box { background: white !important; padding: 30px !important; border-radius: 8px !important; box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important; text-align: center; width: 300px; }
+    </style>
+</head>
+<body>
+    <div id="lock-screen" class="login-overlay"><div class="login-box"><h2 style="margin-top:0; font-size: 22px;">Secure Authentication</h2><p>Enter decryption key:</p><input type="password" id="password-field" placeholder="Password..." style="padding: 10px; width: 85%; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px;"><br><button onclick="verifyAndDecrypt()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; width: 93%; font-weight: bold;">Unlock Script</button><p id="error-message" style="color: red; font-size: 14px; margin-top: 10px; font-weight: bold;"></p></div></div>
+    <script>
+        const encryptedPayload = "${finalPayload}";
+        function rc4Decrypt(k, str) {
+            let s = [], j = 0, x, res = '';
+            for (let i = 0; i < 256; i++) s[i] = i;
+            for (let i = 0; i < 256; i++) { j = (j + s[i] + k.charCodeAt(i % k.length)) % 256; x = s[i]; s[i] = s[j]; s[j] = x; }
+            let i = 0; j = 0;
+            for (let y = 0; y < str.length; y++) { i = (i + 1) % 256; j = (j + s[i]) % 256; x = s[i]; s[i] = s[j]; s[j] = x; res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]); }
+            return res;
+        }
+        function verifyAndDecrypt() {
+            const userKey = document.getElementById('password-field').value.trim();
+            const errorDiv = document.getElementById('error-message');
+            if (!userKey) { errorDiv.textContent = "Please enter a key."; return; }
+            try {
+                const encryptedBinary = atob(encryptedPayload);
+                const unmasked = rc4Decrypt(userKey, encryptedBinary);
+                const masterScriptContent = decodeURIComponent(escape(unmasked));
+                if (!masterScriptContent || masterScriptContent.trim().length === 0) { throw new Error(); }
+                document.getElementById('lock-screen').remove();
+                document.open(); document.write(masterScriptContent); document.close();
+            } catch (err) { errorDiv.textContent = "Invalid password key. Decryption failed."; }
+        }
+        document.getElementById('password-field').addEventListener('keypress', function(e) { if (e.key === 'Enter') verifyAndDecrypt(); });
+    <\/script>
+</body>
+</html>`;
+
+        // Safety Threshold: If file payload text is > 1.5MB, auto-download to save UI rendering threads
+        if (standaloneHTML.length > 50000000) {
+            document.getElementById('outputContainer').classList.add('hidden');
+            triggerDirectBlobDownload(standaloneHTML);
+            showStatusMessage("✓ File Large! Direct Download Triggered.");
+        } else {
+            // Display normal layout for text copy options
+            document.getElementById('outputResult').value = standaloneHTML;
+            document.getElementById('outputContainer').classList.remove('hidden');
+            showStatusMessage("✓ Compiled Successfully.");
+        }
+    }
+
+    function triggerDirectBlobDownload(content) {
+        const blob = new Blob([content], { type: "text/html" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "secure-rc4-gate.html";
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function downloadHTML() {
+        const code = document.getElementById('outputResult').value;
+        if (code) triggerDirectBlobDownload(code);
+    }
+
+    function copyToClipboard() {
+        const outputText = document.getElementById('outputResult');
+        if (!outputText.value) return;
+        navigator.clipboard.writeText(outputText.value).then(() => {
+            showStatusMessage("✓ Copied to clipboard!");
+        });
+    }
+
+    function showStatusMessage(msg) {
+        const statusMsg = document.getElementById('status-message');
+        statusMsg.textContent = msg;
+        statusMsg.classList.remove('hidden');
+        setTimeout(() => statusMsg.classList.add('hidden'), 4000);
+    }
+</script>
+</body>
+</html>
