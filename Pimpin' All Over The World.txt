@@ -1,0 +1,15 @@
+At line:1 char:66
++ ... vert]::ToBase64String([System.IO.File]::ReadAllBytes('Pimpin' All Ove ...
++                                                                  ~
+Missing ')' in method call.
+At line:1 char:67
++ ... ]::ToBase64String([System.IO.File]::ReadAllBytes('Pimpin' All Over Th ...
++                                                               ~~~
+Unexpected token 'All' in expression or statement.
+At line:1 char:89
++ ... ing([System.IO.File]::ReadAllBytes('Pimpin' All Over The World.mp3'))
++                                                                       ~~~
+The string is missing the terminator: '.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingEndParenthesisInMethodCall
+ 

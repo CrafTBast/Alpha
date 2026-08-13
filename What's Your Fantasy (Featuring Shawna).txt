@@ -1,0 +1,15 @@
+At line:1 char:64
++ ... onvert]::ToBase64String([System.IO.File]::ReadAllBytes('What's Your F ...
++                                                                  ~
+Missing ')' in method call.
+At line:1 char:64
++ ... nvert]::ToBase64String([System.IO.File]::ReadAllBytes('What's Your Fa ...
++                                                                 ~
+Unexpected token 's' in expression or statement.
+At line:1 char:101
++ ... IO.File]::ReadAllBytes('What's Your Fantasy (Featuring Shawna).mp3'))
++                                                                       ~~~
+The string is missing the terminator: '.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingEndParenthesisInMethodCall
+ 

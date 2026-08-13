@@ -1,0 +1,7 @@
+Exception calling "ReadAllBytes" with "1" argument(s): "Could not find file 'C:\Users\RWBMQZ\Music\Yeah.mp3'."
+At line:1 char:1
++ [Convert]::ToBase64String([System.IO.File]::ReadAllBytes('Yeah.mp3'))
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : FileNotFoundException
+ 
