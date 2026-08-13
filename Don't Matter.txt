@@ -1,0 +1,15 @@
+At line:1 char:63
++ ... Convert]::ToBase64String([System.IO.File]::ReadAllBytes('Don't Matter ...
++                                                                  ~
+Missing ')' in method call.
+At line:1 char:63
++ ... onvert]::ToBase64String([System.IO.File]::ReadAllBytes('Don't Matter. ...
++                                                                 ~
+Unexpected token 't' in expression or statement.
+At line:1 char:75
++ ... ]::ToBase64String([System.IO.File]::ReadAllBytes('Don't Matter.mp3'))
++                                                                       ~~~
+The string is missing the terminator: '.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingEndParenthesisInMethodCall
+ 

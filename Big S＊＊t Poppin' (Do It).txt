@@ -1,0 +1,19 @@
+At line:1 char:75
++ ... Base64String([System.IO.File]::ReadAllBytes('Big S**t Poppin' (Do It) ...
++                                                                  ~
+Missing ')' in method call.
+At line:1 char:76
++ ... se64String([System.IO.File]::ReadAllBytes('Big S**t Poppin' (Do It).m ...
++                                                                 ~
+Unexpected token '(' in expression or statement.
+At line:1 char:87
++ ... tring([System.IO.File]::ReadAllBytes('Big S**t Poppin' (Do It).mp3'))
++                                                                       ~~~
+The string is missing the terminator: '.
+At line:1 char:87
++ ... tring([System.IO.File]::ReadAllBytes('Big S**t Poppin' (Do It).mp3'))
++                                                                       ~~~
+Unexpected token ''))' in expression or statement.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingEndParenthesisInMethodCall
+ 
