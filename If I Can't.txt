@@ -1,0 +1,15 @@
+At line:1 char:68
++ ... rt]::ToBase64String([System.IO.File]::ReadAllBytes('If I Can't.mp3'))
++                                                                  ~
+Missing ')' in method call.
+At line:1 char:73
++ ... rt]::ToBase64String([System.IO.File]::ReadAllBytes('If I Can't.mp3'))
++                                                                       ~~~
+The string is missing the terminator: '.
+At line:1 char:68
++ ... rt]::ToBase64String([System.IO.File]::ReadAllBytes('If I Can't.mp3'))
++                                                                  ~~~~~~~~
+Unexpected token 't.mp3'))' in expression or statement.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingEndParenthesisInMethodCall
+ 
