@@ -1,0 +1,63 @@
+name: Global Branch File Manifest Generator
+
+on:
+push:
+branches-ignore:
+- 'gh-pages' # Ignore deployment branches if any
+delete: # Run if a branch gets deleted so the json map cleans up
+branches-ignore:
+- 'gh-pages'
+
+permissions:
+contents: write
+
+jobs:
+build:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout main branch code
+uses: actions/checkout@v4
+with:
+fetch-depth: 0 # Fetches all history and all branches instead of just one
+
+- name: Extract files from every branch
+run: |
+echo "{" > dynamic_manifest.json
+first_branch=true
+
+# Loop through all remote branches on GitHub
+for remote_branch in $(git branch -r | grep -v 'HEAD ->'); do
+# Clean up the branch name text (e.g., convert "origin/dev" to "dev")
+branch_name=$(echo "$remote_branch" | sed 's|origin/||')
+
+# Format the output validly as JSON
+if [ "$first_branch" = true ]; then
+first_branch=false
+else
+echo "," >> dynamic_manifest.json
+fi
+
+echo "\"$branch_name\": [" >> dynamic_manifest.json
+
+# Extract the raw file tree list belonging explicitly to that branch
+git ls-tree -r --name-only "$remote_branch" | grep -v '^\.github/' | jq -R . | jq -s -c '.[]' | paste -sd, - >> dynamic_manifest.json
+
+echo "]" >> dynamic_manifest.json
+done
+
+echo "}" >> dynamic_manifest.json
+
+# Pretty-print and overwrite the target file
+cat dynamic_manifest.json | jq '.' > files.json
+rm dynamic_manifest.json
+
+- name: Commit and push file listing back to main branch
+run: |
+git config --global user.name "github-actions[bot]"
+git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+# Explicitly ensure we push updates back into the main branch
+git checkout main
+git add files.json
+git commit -m "Automated update of global branch file manifest" || exit 0
+git push origin main
