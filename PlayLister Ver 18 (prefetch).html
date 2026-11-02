@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Secure Playlist RC4 Gate Generator</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f4f9; color: #333; }
+.container { max-width: 650px; margin: 0 auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+textarea { width: 100%; font-family: monospace; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; resize: vertical; }
+input[type="text"], input[type="date"], input[type="time"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px; }
+.btn-crypt { padding: 12px 20px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; background-color: #007bff; color: white; margin-bottom: 15px; }
+.btn-crypt:hover { background-color: #0056b3; }
+.output-actions { display: flex; gap: 10px; margin-top: 10px; }
+.btn-action { flex: 1; padding: 12px; font-size: 13px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+.btn-copy { background-color: #28a745; }
+.btn-copy:hover { background-color: #218838; }
+.btn-dl { background-color: #17a2b8; }
+.btn-dl:hover { background-color: #138496; }
+.status-msg { text-align: center; color: #28a745; font-weight: bold; margin-top: 10px; display: block; }
+.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+<h2>Secure Playlist Gate Generator</h2>
+
+<label><strong>1. Access Password Key:</strong></label><br>
+<input type="text" id="cipherKey" placeholder="Enter password to unlock the playlist..."><br>
+
+<label><strong>2. Set Expiration Date & Time (Optional):</strong></label><br>
+<div style="display: flex; gap: 10px; margin-bottom: 15px;">
+    <input type="date" id="expiryDate" style="margin-bottom: 0;">
+    <input type="time" id="expiryTime" style="margin-bottom: 0;">
+</div>
+
+<label><strong>3. Input Streaming Track URLs (One per line):</strong></label>
+<textarea id="inputTracks" rows="6" placeholder="https://example.com"></textarea>
+<br><br>
+
+<button class="btn-crypt" onclick="generateSecureGate()">Compile & Build Gate</button>
+<span id="status-message" class="status-msg hidden">✓ Compiled Successfully!</span>
+
+<div id="outputContainer" class="hidden">
+<h3>Compiled HTML Code Output:</h3>
+<textarea id="outputResult" rows="10" readonly></textarea>
+<div class="output-actions">
+<button class="btn-action btn-copy" onclick="copyToClipboard()">Copy Code to Clipboard</button>
+<button class="btn-action btn-dl" onclick="downloadSecureFile()">Download Gateway File</button>
+</div>
+</div>
+</div>
+
+<script>
+function rc4Cipher(k, str) {
+    let s = [], j = 0, x, res = '';
+    for (let i = 0; i < 256; i++) s[i] = i;
+    for (let i = 0; i < 256; i++) { 
+        j = (j + s[i] + k.charCodeAt(i % k.length)) % 256; 
+        x = s[i]; s[i] = s[j]; s[j] = x; 
+    }
+    let i = 0; j = 0;
+    for (let y = 0; y < str.length; y++) { 
+        i = (i + 1) % 256; 
+        j = (j + s[i]) % 256; 
+        x = s[i]; s[i] = s[j]; s[j] = x; 
+        res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]); 
+    }
+    return res;
+}
+
+function generateSecureGate() {
+    const key = document.getElementById('cipherKey').value.trim();
+    if (!key) {
+        alert("Please enter an Access Password Key first!");
+        return;
+    }
+
+    const inputElement = document.getElementById('inputTracks');
+    
+    const tracksArray = inputElement ? inputElement.value.split('\n').map(url => url.trim()).filter(url => url.length > 0) : [];
+
+    if (tracksArray.length === 0) {
+        tracksArray.push("default_stream.mp3");
+    }
+
+    const expiryDateVal = document.getElementById('expiryDate').value;
+    const expiryTimeVal = document.getElementById('expiryTime').value;
+    let expiryTimestamp = 0;
+    if (expiryDateVal) {
+        expiryTimestamp = new Date(expiryDateVal + "T" + (expiryTimeVal || "23:59")).getTime();
+    } else {
+        expiryTimestamp = new Date().getTime() + (60 * 60 * 1000);
+    }
+
+    let internalPlayerCode = '<div id="box">';
+    internalPlayerCode += '<h3>Press Esc for Notepad</h3>';
+    internalPlayerCode += '<p id="status">System Ready</p>';
+    internalPlayerCode += '<button id="playBtn">PLAY/PAUSE</button>';
+    internalPlayerCode += '<button id="nextBtn">NEXT</button>';
+    internalPlayerCode += '<button id="shufBtn">SHUFFLE: OFF</button>';
+    internalPlayerCode += '<br><br>';
+    internalPlayerCode += '<label>VOLUME</label><br>';
+    internalPlayerCode += '<input type="range" id="vol" min="0" max="1" step="0.05" value="0.5"><br>';
+    internalPlayerCode += '<label>SEEK TRACK</label><br>';
+    internalPlayerCode += '<input type="range" id="seek" min="0" max="100" value="0"><br>';
+    internalPlayerCode += '<p id="timeText">00:00 / 00:00</p>';
+    internalPlayerCode += '<ul id="list"></ul>';
+    internalPlayerCode += '</div>';
+    
+    internalPlayerCode += '<script>';
+    internalPlayerCode += 'const originalPlaylist = ' + JSON.stringify(tracksArray) + ';';
+    internalPlayerCode += 'let playlist = [...originalPlaylist];';
+    internalPlayerCode += 'let currentIdx=0, isShuffle=false;';
+    
+    // Global cache mapping stream URL strings to their raw Base64 data values
+    internalPlayerCode += 'const streamCache = {};';
+
+    internalPlayerCode += 'const audio=new Audio(); audio.volume=0.5;';
+    internalPlayerCode += 'const timeText=document.getElementById("timeText"), seek=document.getElementById("seek");';
+    internalPlayerCode += 'window.hiddenLimitValue = ' + expiryTimestamp + ';';
+    
+    internalPlayerCode += 'function checkLiveExpiration() {';
+    internalPlayerCode += '  if (window.hiddenLimitValue > 0 && new Date().getTime() > window.hiddenLimitValue) {';
+    internalPlayerCode += '    if(typeof audio !== "undefined") { audio.pause(); audio.src=""; }';
+    internalPlayerCode += '    document.documentElement.innerHTML = "";';
+    internalPlayerCode += '    window.location.replace("about:blank");';
+    internalPlayerCode += '  }';
+    internalPlayerCode += '}';
+    internalPlayerCode += 'setInterval(checkLiveExpiration, 1000);';
+
+    internalPlayerCode += 'function detectInspector() {';
+    internalPlayerCode += '  const threshold = 160;';
+    internalPlayerCode += '  if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {';
+    internalPlayerCode += '    if(typeof audio !== "undefined") { audio.pause(); audio.src=""; }';
+    internalPlayerCode += '    document.documentElement.innerHTML = "";';
+    internalPlayerCode += '    window.location.replace("about:blank");';
+    internalPlayerCode += '  }';
+    internalPlayerCode += '}';
+    internalPlayerCode += 'setInterval(detectInspector, 500);';
+
+    internalPlayerCode += 'function render(){';
+    internalPlayerCode += 'const u=document.getElementById("list"); u.innerHTML="";';
+    internalPlayerCode += 'playlist.forEach((url,i)=>{';
+    internalPlayerCode += 'const li=document.createElement("li");';
+    internalPlayerCode += 'li.innerText=(i+1)+". "+decodeURIComponent(url.substring(url.lastIndexOf("/")+1));';
+    internalPlayerCode += 'li.onclick=()=>playTrack(i); li.id="t-"+i;';
+    internalPlayerCode += 'if(i===currentIdx && audio.src) li.classList.add("active");';
+    internalPlayerCode += 'u.appendChild(li);';
+    internalPlayerCode += '});';
+    internalPlayerCode += '}';
+    internalPlayerCode += 'function fmtTime(s){if(isNaN(s))return"00:00";const m=Math.floor(s/60),sec=Math.floor(s%60);return(m<10?"0":"")+m+":"+(sec<10?"0":"")+sec;}';
+
+    // Core playback engine leveraging the streamCache layer
+    internalPlayerCode += 'function playTrack(idx){';
+    internalPlayerCode += '  if(idx>=playlist.length)idx=0; if(idx<0)idx=playlist.length-1; currentIdx=idx;';
+    internalPlayerCode += '  document.querySelectorAll("#list li").forEach(l=>l.classList.remove("active"));';
+    internalPlayerCode += '  const targetItem=document.getElementById("t-"+idx); if(targetItem)targetItem.classList.add("active");';
+    
+    internalPlayerCode += '  const targetUrl = playlist[currentIdx];';
+    
+    // Check if the stream vector already exists in our cache
+    internalPlayerCode += '  if (streamCache[targetUrl]) {';
+    internalPlayerCode += '    audio.src = "data:audio/mp3;base64," + streamCache[targetUrl];';
+    internalPlayerCode += '    audio.play();';
+    internalPlayerCode += '    document.getElementById("status").innerText = "Playing track " + (currentIdx+1) + " (Cached)";';
+    internalPlayerCode += '    prefetchNextTrack();';
+    internalPlayerCode += '  } else {';
+    internalPlayerCode += '    document.getElementById("status").innerText = "Streaming data...";';
+    internalPlayerCode += '    fetch(targetUrl).then(r=>r.text()).then(b64=>{';
+    internalPlayerCode += '      const cleanB64 = b64.trim();';
+    internalPlayerCode += '      streamCache[targetUrl] = cleanB64;'; // Cache it for future repeat plays
+    internalPlayerCode += '      audio.src = "data:audio/mp3;base64," + cleanB64;';
+    internalPlayerCode += '      audio.play();';
+    internalPlayerCode += '      document.getElementById("status").innerText = "Playing track " + (currentIdx+1);';
+    internalPlayerCode += '      prefetchNextTrack();'; // Immediately look ahead once current stream loads
+    internalPlayerCode += '    }).catch(()=>{';
+    internalPlayerCode += '      document.getElementById("status").innerText = "Pipeline Stream Error";';
+    internalPlayerCode += '    });';
+    internalPlayerCode += '  }';
+    internalPlayerCode += '}';
+    
+    // Background execution handler to verify and prefetch the subsequent song data vector
+    internalPlayerCode += 'function prefetchNextTrack() {';
+    internalPlayerCode += '  let nextIdx = currentIdx + 1;';
+    internalPlayerCode += '  if (nextIdx >= playlist.length) nextIdx = 0;';
+    internalPlayerCode += '  const nextUrl = playlist[nextIdx];';
+    
+    // Only prefetch if it hasn't already been downloaded to the cache
+    internalPlayerCode += '  if (nextUrl && !streamCache[nextUrl]) {';
+    internalPlayerCode += '    console.log("Prefetching subsequent track index:", nextIdx);';
+    internalPlayerCode += '    fetch(nextUrl).then(r=>r.text()).then(b64=>{';
+    internalPlayerCode += '      streamCache[nextUrl] = b64.trim();';
+    internalPlayerCode += '      console.log("Track successfully buffered in cache memory:", nextIdx);';
+    internalPlayerCode += '    }).catch(err=> console.log("Prefetch skipped or encountered network latency."));';
+    internalPlayerCode += '  }';
+    internalPlayerCode += '}';
+    
+    internalPlayerCode += 'function nextTrack(){ playTrack(currentIdx+1); }';
+    
+    internalPlayerCode += 'document.getElementById("playBtn").onclick=()=>{ if(audio.src){if(audio.paused){audio.play();document.getElementById("status").innerText="Playing track "+(currentIdx+1);}else{audio.pause();document.getElementById("status").innerText="Paused";}}else{ playTrack(0); } };';
+    internalPlayerCode += 'document.getElementById("nextBtn").onclick=()=>nextTrack();';
+    internalPlayerCode += 'audio.onended=()=>nextTrack();';
+    
+    internalPlayerCode += 'document.getElementById("shufBtn").onclick=(e)=>{';
+    internalPlayerCode += '  isShuffle=!isShuffle;';
+    internalPlayerCode += '  const currentTrackUrl = playlist[currentIdx];';
+    internalPlayerCode += '  if(isShuffle){';
+    internalPlayerCode += '    e.target.innerText="SHUFFLE: ON";';
+    internalPlayerCode += '    for(let i=playlist.length-1;i>0;i--){';
+    internalPlayerCode += '      const j=Math.floor(Math.random()*(i+1));';
+    internalPlayerCode += '      [playlist[i],playlist[j]]=[playlist[j],playlist[i]];';
+    internalPlayerCode += '    }';
+    internalPlayerCode += '  }else{';
+    internalPlayerCode += '    e.target.innerText="SHUFFLE: OFF";';
+    internalPlayerCode += '    playlist=[...originalPlaylist];';
+    internalPlayerCode += '  }';
+    internalPlayerCode += '  currentIdx=playlist.indexOf(currentTrackUrl); if(currentIdx===-1)currentIdx=0;';
+    internalPlayerCode += '  render();';
+    
+    // THE FIX: Explicitly refresh the UI text with the newly calculated track placement
+    internalPlayerCode += '  if(audio.src) {';
+    internalPlayerCode += '    document.getElementById("status").innerText = "Playing track " + (currentIdx + 1) + (streamCache[currentTrackUrl] ? " (Cached)" : "");';
+    internalPlayerCode += '  }';
+    
+    internalPlayerCode += '  prefetchNextTrack();';
+    internalPlayerCode += '};';
+
+    
+    internalPlayerCode += 'document.getElementById("vol").oninput=(e)=>audio.volume=e.target.value;';
+    
+    internalPlayerCode += 'audio.ontimeupdate=()=>{ if(audio.duration && !audio.seeking){ seek.value=(audio.currentTime/audio.duration)*100; timeText.innerText=fmtTime(audio.currentTime)+" / "+fmtTime(audio.duration); } };';
+    internalPlayerCode += 'seek.oninput=(e)=>{ if(audio.duration){ audio.currentTime=(e.target.value/100)*audio.duration; } };';
+    
+    internalPlayerCode += 'document.addEventListener("visibilitychange",()=>{ if(document.hidden && !audio.paused){ audio.pause(); document.getElementById("status").innerText="Focus lost - Paused"; } });';
+    
+    internalPlayerCode += 'render();';
+
+
+
+
+
+
+
+internalPlayerCode += 'function initializeWakeLockButton() {';
+internalPlayerCode += '    const oldHost = document.getElementById("wake-toggle-host");';
+internalPlayerCode += '    if (oldHost) oldHost.remove();';
+internalPlayerCode += '    const host = document.createElement("div");';
+internalPlayerCode += '    host.id = "wake-toggle-host";';
+internalPlayerCode += '    document.documentElement.appendChild(host);';
+internalPlayerCode += '    const shadow = host.attachShadow({ mode: "open" });';
+internalPlayerCode += '    let s = document.createElement("style");';
+internalPlayerCode += '    s.textContent = ":host{position:fixed!important;bottom:25px!important;left:50%!important;transform:translateX(-50%)!important;z-index:2147483647!important;isolation:isolate!important;pointer-events:auto!important;visibility:visible!important;display:block!important;opacity:1!important}#wake-toggle-btn{display:block!important;width:15px!important;height:15px!important;background-color:#ef4444!important;border:1.5px solid #ffffff!important;box-shadow:0 2px 6px rgba(0,0,0,0.5)!important;cursor:pointer!important;transform:rotate(45deg)!important;padding:0!important;box-sizing:border-box!important;transition:background-color .3s ease,transform .2s ease!important}#wake-toggle-btn:hover{transform:rotate(45deg) scale(1.2)!important}#wake-toggle-btn.active{background-color:#22c55e!important;box-shadow:0 0 8px #22c55e,0 2px 6px rgba(0,0,0,0.5)!important}";';
+internalPlayerCode += '    shadow.appendChild(s);';
+internalPlayerCode += '    const btn = document.createElement("button");';
+internalPlayerCode += '    btn.id = "wake-toggle-btn";';
+internalPlayerCode += '    btn.setAttribute("aria-label", "Toggle Wake Lock");';
+internalPlayerCode += '    shadow.appendChild(btn);';
+internalPlayerCode += '    let wakeLock = null;';
+internalPlayerCode += '    async function requestWakeLock() {';
+internalPlayerCode += '        try {';
+internalPlayerCode += '            wakeLock = await navigator.wakeLock.request("screen");';
+internalPlayerCode += '            btn.classList.add("active");';
+internalPlayerCode += '            localStorage.setItem("pcWakeLockActive", "true");';
+internalPlayerCode += '            wakeLock.addEventListener("release", () => {';
+internalPlayerCode += '                if (wakeLock !== null) handleRelease();';
+internalPlayerCode += '            });';
+internalPlayerCode += '        } catch (err) {';
+internalPlayerCode += '            handleRelease();';
+internalPlayerCode += '        }';
+internalPlayerCode += '    }';
+internalPlayerCode += '    function handleRelease() {';
+internalPlayerCode += '        wakeLock = null;';
+internalPlayerCode += '        btn.classList.remove("active");';
+internalPlayerCode += '        localStorage.setItem("pcWakeLockActive", "false");';
+internalPlayerCode += '    }';
+internalPlayerCode += '    btn.addEventListener("click", async () => {';
+internalPlayerCode += '        if (!("wakeLock" in navigator)) {';
+internalPlayerCode += '            console.warn("Wake Lock API not supported.");';
+internalPlayerCode += '            return;';
+internalPlayerCode += '        }';
+internalPlayerCode += '        if (wakeLock === null) {';
+internalPlayerCode += '            await requestWakeLock();';
+internalPlayerCode += '        } else {';
+internalPlayerCode += '            await wakeLock.release();';
+internalPlayerCode += '        }';
+internalPlayerCode += '    });';
+internalPlayerCode += '    document.addEventListener("visibilitychange", async () => {';
+internalPlayerCode += '        if (document.visibilityState === "visible" && localStorage.getItem("pcWakeLockActive") === "true") {';
+internalPlayerCode += '            await requestWakeLock();';
+internalPlayerCode += '        }';
+internalPlayerCode += '    });';
+internalPlayerCode += '    if (localStorage.getItem("pcWakeLockActive") === "true") {';
+internalPlayerCode += '        setTimeout(async () => {';
+internalPlayerCode += '            await requestWakeLock();';
+internalPlayerCode += '        }, 100);';
+internalPlayerCode += '    }';
+internalPlayerCode += '}';
+internalPlayerCode += 'initializeWakeLockButton();';
+
+
+
+
+internalPlayerCode += 'function initEscapeNotepad() {';
+internalPlayerCode += '    let currentFontSize = 14;';
+internalPlayerCode += '    const style = document.createElement("style");';
+internalPlayerCode += '    style.textContent = "#workspace-notepad { position: fixed; top: -100%; left: 0; width: 100vw; height: 100vh; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.15); transition: top 0.25s ease-in-out; display: flex; flex-direction: column; z-index: 10000; color-scheme: light !important; } #workspace-notepad.visible { top: 0; } .notepad-menu-bar { background: #f5f5f5 !important; padding: 0 8px; height: 24px; font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, \\"Segoe UI\\", Roboto, sans-serif; border-bottom: 1px solid #ddd; color: #444 !important; user-select: none; display: flex; justify-content: space-between; align-items: center; } .notepad-left-section { display: flex; align-items: center; gap: 12px; height: 100%; } .notepad-title { font-weight: bold; color: #666; } .notepad-copy-container { display: flex; align-items: center; gap: 10px; height: 100%; } .notepad-copy-group { display: flex; align-items: center; gap: 3px; height: 100%; } .notepad-quick-input { -webkit-appearance: none !important; appearance: none !important; display: inline-block !important; box-sizing: border-box !important; margin: 0 !important; vertical-align: middle !important; border: 1px solid #ccc !important; background: #fff !important; color: #333333 !important; height: 16px !important; width: 70px !important; font-size: 10px !important; padding: 0 3px !important; outline: none !important; font-family: sans-serif !important; border-radius: 2px !important; } .notepad-quick-input:focus { border-color: #999 !important; background: #fff !important; } .notepad-lbl-btn { background: transparent; border: none; height: 100%; padding: 0 2px; font-size: 10px; color: #0066cc; cursor: pointer; outline: none; transition: color 0.1s; } .notepad-lbl-btn:hover { color: #000; text-decoration: underline; } .notepad-lbl-btn.copied { color: #155724; font-weight: bold; } .notepad-font-controls { display: flex; align-items: center; gap: 2px; height: 100%; } .notepad-btn { background: transparent; border: none; height: 100%; padding: 0 8px; cursor: pointer; font-size: 12px; color: #555; outline: none; } .notepad-btn:hover { background: #e5e5e5; color: #000; } .font-size-display { font-size: 11px; color: #666; min-width: 32px; text-align: center; } .notepad-text-input { width: 100%; height: calc(100% - 24px); border: none; padding: 10px; font-family: Consolas, \\"Courier New\\", monospace; font-size: 14px; resize: none; box-sizing: border-box; outline: none; background: #ffffff; color: #111111; line-height: 1.4; }";';
+internalPlayerCode += '    document.head.appendChild(style);';
+internalPlayerCode += '    const workspaceNotepad = document.createElement("div");';
+internalPlayerCode += '    workspaceNotepad.id = "workspace-notepad";';
+internalPlayerCode += '    workspaceNotepad.innerHTML = `<div class="notepad-menu-bar"><div class="notepad-left-section"><span class="notepad-title">Notepad</span><div class="notepad-copy-container"><div class="notepad-copy-group"><input type="text" id="input-u1" class="notepad-quick-input" placeholder="User 1"><button class="notepad-lbl-btn" data-target="input-u1" title="Copy User 1">copy</button></div><div class="notepad-copy-group"><input type="password" id="input-p1" class="notepad-quick-input" placeholder="Pass 1"><button class="notepad-lbl-btn" data-target="input-p1" title="Copy Pass 1">copy</button></div><div class="notepad-copy-group"><input type="text" id="input-u2" class="notepad-quick-input" placeholder="User 2"><button class="notepad-lbl-btn" data-target="input-u2" title="Copy User 2">copy</button></div><div class="notepad-copy-group"><input type="password" id="input-p2" class="notepad-quick-input" placeholder="Pass 2"><button class="notepad-lbl-btn" data-target="input-p2" title="Copy Pass 2">copy</button></div></div></div><div class="notepad-font-controls"><button class="notepad-btn" id="font-decrease" title="Decrease size">−</button><span class="font-size-display" id="font-display">14px</span><button class="notepad-btn" id="font-increase" title="Increase size">+</button></div></div><textarea class="notepad-text-input" placeholder="Type here..."></textarea>`;';
+internalPlayerCode += '    document.body.appendChild(workspaceNotepad);';
+internalPlayerCode += '    const textarea = workspaceNotepad.querySelector(".notepad-text-input");';
+internalPlayerCode += '    const btnDecrease = workspaceNotepad.querySelector("#font-decrease");';
+internalPlayerCode += '    const btnIncrease = workspaceNotepad.querySelector("#font-increase");';
+internalPlayerCode += '    const fontDisplay = workspaceNotepad.querySelector("#font-display");';
+internalPlayerCode += '    const copyLabels = workspaceNotepad.querySelectorAll(".notepad-lbl-btn");';
+internalPlayerCode += '    const quickInputs = workspaceNotepad.querySelectorAll(".notepad-quick-input");';
+internalPlayerCode += '    let wasPlayingWhenOpened = false;';
+internalPlayerCode += '    function updateFontSize(newSize) {';
+internalPlayerCode += '        currentFontSize = Math.max(10, Math.min(28, newSize));';
+internalPlayerCode += '        textarea.style.fontSize = currentFontSize + "px";';
+internalPlayerCode += '        fontDisplay.textContent = currentFontSize + "px";';
+internalPlayerCode += '        localStorage.setItem("notepad_font_size", currentFontSize);';
+internalPlayerCode += '    };';
+internalPlayerCode += '    const savedFontSize = localStorage.getItem("notepad_font_size");';
+internalPlayerCode += '    if (savedFontSize) { updateFontSize(parseInt(savedFontSize, 10)); }';
+internalPlayerCode += '    btnDecrease.addEventListener("click", function(e) { e.stopPropagation(); updateFontSize(currentFontSize - 1); textarea.focus(); });';
+internalPlayerCode += '    btnIncrease.addEventListener("click", function(e) { e.stopPropagation(); updateFontSize(currentFontSize + 1); textarea.focus(); });';
+internalPlayerCode += '    quickInputs.forEach(input => { input.addEventListener("keydown", function(e) { e.stopPropagation(); }); });';
+internalPlayerCode += '    copyLabels.forEach(label => {';
+internalPlayerCode += '        label.addEventListener("click", function(e) {';
+internalPlayerCode += '            e.stopPropagation();';
+internalPlayerCode += '            const targetId = this.getAttribute("data-target");';
+internalPlayerCode += '            const targetInput = workspaceNotepad.querySelector("#" + targetId);';
+internalPlayerCode += '            const textToCopy = targetInput.value;';
+internalPlayerCode += '            if (textToCopy) {';
+internalPlayerCode += '                navigator.clipboard.writeText(textToCopy).then(() => {';
+internalPlayerCode += '                    this.classList.add("copied");';
+internalPlayerCode += '                    this.textContent = "copied!";';
+internalPlayerCode += '                    setTimeout(() => {';
+internalPlayerCode += '                        this.classList.remove("copied");';
+internalPlayerCode += '                        this.textContent = "copy";';
+internalPlayerCode += '                    }, 800);';
+internalPlayerCode += '                }).catch(err => { console.error("Copy failed: ", err); });';
+internalPlayerCode += '            }';
+internalPlayerCode += '            textarea.focus();';
+internalPlayerCode += '        });';
+internalPlayerCode += '    });';
+internalPlayerCode += '    const credInputs = {';
+internalPlayerCode += '        "notepad_u1": workspaceNotepad.querySelector("#input-u1"),';
+internalPlayerCode += '        "notepad_p1": workspaceNotepad.querySelector("#input-p1"),';
+internalPlayerCode += '        "notepad_u2": workspaceNotepad.querySelector("#input-u2"),';
+internalPlayerCode += '        "notepad_p2": workspaceNotepad.querySelector("#input-p2")';
+internalPlayerCode += '    };';
+internalPlayerCode += '    const savedNotes = localStorage.getItem("notepad_current_content");';
+internalPlayerCode += '    if (savedNotes !== null) textarea.value = savedNotes;';
+internalPlayerCode += '    textarea.addEventListener("input", () => localStorage.setItem("notepad_current_content", textarea.value));';
+internalPlayerCode += '    Object.keys(credInputs).forEach(key => {';
+internalPlayerCode += '        const inputEl = credInputs[key];';
+internalPlayerCode += '        const savedVal = localStorage.getItem(key);';
+internalPlayerCode += '        if (savedVal !== null) inputEl.value = savedVal;';
+internalPlayerCode += '        inputEl.addEventListener("input", () => localStorage.setItem(key, inputEl.value));';
+internalPlayerCode += '    });';
+internalPlayerCode += '    document.addEventListener("keydown", function(event) {';
+internalPlayerCode += '        if (event.key === "Escape" || event.keyCode === 27 || event.key === "Insert" || event.keyCode === 45) {';
+internalPlayerCode += '            event.preventDefault();';
+internalPlayerCode += '            event.stopPropagation();';
+internalPlayerCode += '            workspaceNotepad.classList.toggle("visible");';
+internalPlayerCode += '            if (workspaceNotepad.classList.contains("visible")) {';
+internalPlayerCode += '                try {';
+internalPlayerCode += '                    const statusEl = document.getElementById("status");';
+internalPlayerCode += '                    const playBtnEl = document.getElementById("playBtn");';
+internalPlayerCode += '                    if (statusEl && playBtnEl && (statusEl.innerText.indexOf("Playing") !== -1 || statusEl.innerText.indexOf("Streaming") !== -1)) {';
+internalPlayerCode += '                        wasPlayingWhenOpened = true;';
+internalPlayerCode += '                        playBtnEl.click();';
+internalPlayerCode += '                    } else {';
+internalPlayerCode += '                        wasPlayingWhenOpened = false;';
+internalPlayerCode += '                    }';
+internalPlayerCode += '                } catch (e) {}';
+internalPlayerCode += '                setTimeout(() => { textarea.focus(); }, 250);';
+internalPlayerCode += '            } else {';
+internalPlayerCode += '                textarea.blur();';
+internalPlayerCode += '                try {';
+internalPlayerCode += '                    const statusEl = document.getElementById("status");';
+internalPlayerCode += '                    const playBtnEl = document.getElementById("playBtn");';
+internalPlayerCode += '                    if (wasPlayingWhenOpened && statusEl && playBtnEl && statusEl.innerText.indexOf("Paused") !== -1) {';
+internalPlayerCode += '                        playBtnEl.click();';
+internalPlayerCode += '                    }';
+internalPlayerCode += '                } catch (e) {}';
+internalPlayerCode += '                wasPlayingWhenOpened = false;';
+internalPlayerCode += '                const imgBox = document.getElementById("image-container");';
+internalPlayerCode += '                const audioBox = document.getElementById("audio-container");';
+internalPlayerCode += '                const textBox = document.getElementById("text-renderer");';
+internalPlayerCode += '                if (imgBox && (imgBox.style.display === "flex" || imgBox.style.display === "block")) { imgBox.focus(); }';
+internalPlayerCode += '                else if (audioBox && (audioBox.style.display === "flex" || audioBox.style.display === "block")) { audioBox.focus(); }';
+internalPlayerCode += '                else if (textBox && (textBox.style.display === "flex" || textBox.style.display === "block")) { textBox.focus(); }';
+internalPlayerCode += '                else { document.body.focus(); }';
+internalPlayerCode += '            }';
+internalPlayerCode += '        }';
+internalPlayerCode += '    }, true);';
+internalPlayerCode += '}';
+internalPlayerCode += 'initEscapeNotepad();';
+
+
+
+
+
+
+    internalPlayerCode += '<' + '\/script>';
+
+
+
+
+    let internalGatekeeperCode = 'function verifyEnvironment(masterKey, rawMediaPayload) {';
+    internalGatekeeperCode += '  document.getElementById("gate-container").innerHTML = "<div id=\\"box\\" style=\\"border:1px dashed #ff3333;padding:30px;\\"><h3>ENVIRONMENT INTEGRITY CHECK</h3><p id=\\"check-status\\">Analyzing system vectors...</p></div>";';
+    
+    internalGatekeeperCode += '  const threshold = 160;';
+    internalGatekeeperCode += '  if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {';
+    internalGatekeeperCode += '    document.documentElement.innerHTML = ""; window.location.replace("about:blank"); return;';
+    internalGatekeeperCode += '  }';
+    
+    internalGatekeeperCode += '  const validationStart = performance.now();';
+    
+    internalGatekeeperCode += '  setTimeout(() => {';
+    internalGatekeeperCode += '    const validationEnd = performance.now();';
+    internalGatekeeperCode += '    if ((validationEnd - validationStart) > 350) {';
+    internalGatekeeperCode += '      document.documentElement.innerHTML = ""; window.location.replace("about:blank"); return;';
+    internalGatekeeperCode += '    }';
+    internalGatekeeperCode += '    if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {';
+    internalGatekeeperCode += '      document.documentElement.innerHTML = ""; window.location.replace("about:blank"); return;';
+    internalGatekeeperCode += '    }';
+    
+    internalGatekeeperCode += '    try {';
+    internalGatekeeperCode += '      const rawBin = decodeURIComponent(atob(rawMediaPayload));';
+    internalGatekeeperCode += '      const decrypted = rc4Decrypt(masterKey, rawBin);';
+    
+    internalGatekeeperCode += '      let playerHTML = "";';
+    internalGatekeeperCode += '      try {';
+    internalGatekeeperCode += '        playerHTML = decodeURIComponent(escape(decrypted));';
+    internalGatekeeperCode += '      } catch(e) { throw new Error("Translation Failure"); }';
+    
+    internalGatekeeperCode += '      if (!playerHTML || !playerHTML.includes("status")) throw new Error("Structure Break");';
+    
+    internalGatekeeperCode += '      document.getElementById("gate-container").innerHTML = playerHTML;';
+    internalGatekeeperCode += '      const codes = document.getElementById("gate-container").getElementsByTagName("script");';
+    internalGatekeeperCode += '      for (let i = 0; i < codes.length; i++) { eval(codes[i].text); }';
+
+    
+    internalGatekeeperCode += '    } catch(err) {';
+    internalGatekeeperCode += '      document.getElementById("gate-container").innerHTML = "<div id=\\"box\\"><h3>SECURE NOTEPAD GATEWAY</h3><p>Enter the master authorization credentials below to access this secure workstation.</p><input type=\\"password\\" id=\\"password-field\\" placeholder=\\"Enter Unlock Key\\"><br><button onclick=\\"verifyAndUnlock()\\">Unlock Workstation</button><p id=\\"error-message\\" style=\\"color:red; font-weight:bold;\\">Invalid Key! Access Denied.</p></div>";';
+    internalGatekeeperCode += '      document.getElementById("password-field").focus();';
+    internalGatekeeperCode += '      document.getElementById("password-field").addEventListener("keypress", function(e) { if (e.key === "Enter") verifyAndUnlock(); });';
+    internalGatekeeperCode += '    }';
+    
+    internalGatekeeperCode += '  }, 100);';
+    internalGatekeeperCode += '}';
+
+
+
+
+
+    const userSelectedKey = document.getElementById('cipherKey') ? document.getElementById('cipherKey').value.trim() : "SecretMasterKey123";
+
+    const rawMediaCipher = rc4Cipher(userSelectedKey, unescape(encodeURIComponent(internalPlayerCode)));
+    const encryptedMedia = btoa(encodeURIComponent(rawMediaCipher));
+
+    const gatekeeperKey = "LOCAL_CORE_VERIFICATION_VECTOR_TOKEN";
+    const rawGatekeeperCipher = rc4Cipher(gatekeeperKey, unescape(encodeURIComponent(internalGatekeeperCode)));
+    const encryptedGatekeeper = btoa(encodeURIComponent(rawGatekeeperCipher));
+
+
+    const outputGateCode = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Secure Gateway</title>
+<style>
+body{background:#000;color:#fff;font-family:monospace;padding:20px;text-align:center;}
+#box{border:1px solid #fff;padding:20px;display:inline-block;max-width:400px;width:100%;}
+ul{text-align:left;list-style:none;padding:0;} li{padding:8px;cursor:pointer;border-bottom:1px solid #333;}
+li:hover{background:#222;} li.active{color:#0f0;font-weight:bold;} button{padding:10px;margin:5px;cursor:pointer;background:#222;color:#fff;border:1px solid #fff;}
+input[type="range"]{width:80%;margin:10px 0;cursor:pointer;}
+input[type="password"]{padding:10px; width:80%; background:#111; color:#0f0; border:1px solid #fff; text-align:center; margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div id="gate-container">
+    <div id="box">
+        <h3>SECURE NOTEPAD GATEWAY</h3>
+        <p>Enter the master authorization credentials below to access this secure workstation.</p>
+        <input type="password" id="password-field" placeholder="Enter Unlock Key"><br>
+        <button onclick="verifyAndUnlock()">Unlock Workstation</button>
+        <p id="error-message" style="color:red; font-weight:bold;"></p>
+    </div>
+</div>
+
+<script>
+const gatekeeperPayload = "${encryptedGatekeeper}";
+const mediaPayload = "${encryptedMedia}";
+const systemGateVector = "LOCAL_CORE_VERIFICATION_VECTOR_TOKEN";
+
+function rc4Decrypt(k, str) {
+    let s = [], j = 0, x, res = '';
+    for (let i = 0; i < 256; i++) s[i] = i;
+    for (let i = 0; i < 256; i++) { j = (j + s[i] + k.charCodeAt(i % k.length)) % 256; x = s[i]; s[i] = s[j]; s[j] = x; }
+    let i = 0; j = 0;
+    for (let y = 0; y < str.length; y++) { i = (i + 1) % 256; j = (j + s[i]) % 256; x = s[i]; s[i] = s[j]; s[j] = x; res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]); }
+    return res;
+}
+
+function verifyAndUnlock() {
+    const key = document.getElementById('password-field').value.trim();
+    if (!key) return;
+
+    try {
+        const rawBin = decodeURIComponent(atob(gatekeeperPayload)); 
+        const decryptedGate = rc4Decrypt(systemGateVector, rawBin);
+        const gatekeeperJS = decodeURIComponent(escape(decryptedGate));
+        
+        const scriptElement = document.createElement('script');
+        scriptElement.text = gatekeeperJS;
+        document.body.appendChild(scriptElement);
+        
+        verifyEnvironment(key, mediaPayload);
+
+    } catch (err) {
+        document.getElementById('error-message').textContent = "Initialization breakdown. Access Denied.";
+    }
+}
+
+
+document.getElementById('password-field').addEventListener('keypress', function(e) { if (e.key === 'Enter') verifyAndUnlock(); });
+` + '<' + '/script>' + `
+</body>
+</html>`;
+
+    document.getElementById('outputResult').value = outputGateCode;
+    document.getElementById('outputContainer').classList.remove('hidden');
+    document.getElementById('status-message').classList.remove('hidden');
+}
+
+
+function copyToClipboard() {
+    const outputText = document.getElementById('outputResult');
+    outputText.select();
+    navigator.clipboard.writeText(outputText.value);
+    alert("Copied gateway file layout text!");
+}
+
+function downloadSecureFile() {
+    const textData = document.getElementById("outputResult").value;
+    if(!textData) return;
+    const blob = new Blob([textData], { type: "text/html" });
+    const a = document.createElement("a");
+    a.download = "notepad_workstation.html";
+    a.href = window.URL.createObjectURL(blob);
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+</script>
+</body>
+</html>
+
