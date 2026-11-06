@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64 Text File Video Viewer (Ordered & Full Width)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 25px;
+        }
+        #drop-zone {
+            border: 3px dashed #3498db;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            background-color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        #drop-zone.hover {
+            background-color: #ebf5fb;
+            border-color: #2980b9;
+        }
+        #drop-zone p {
+            margin: 0;
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+        #file-input {
+            display: none;
+        }
+        #output-container {
+            margin-top: 30px;
+        }
+        .file-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .file-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .file-name {
+            font-weight: bold;
+            color: #2d3748;
+        }
+        .file-size {
+            font-size: 0.85rem;
+            color: #718096;
+        }
+        .video-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f7fafc;
+            border: 1px dashed #cbd5e0;
+            border-radius: 6px;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+            min-height: 250px;
+        }
+        .video-container video {
+            width: 100%;
+            max-height: 600px;
+            display: block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            outline: none;
+        }
+        .loading-text {
+            color: #718096;
+            font-style: italic;
+        }
+        .error-msg {
+            color: #e53e3e;
+            font-weight: 500;
+            font-size: 0.95rem;
+            padding: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Ordered Base64 Text File Video Viewer</h2>
+    <p class="description">Drag and drop your <strong>.txt files</strong>. They will decode and play back as MP4 videos in chronological order based on their file names.</p>
+
+    <!-- Drop Zone Target -->
+    <div id="drop-zone">
+        <p>Drag & drop your <strong>.txt files</strong> here or <strong>click to browse</strong></p>
+        <input type="file" id="file-input" multiple accept=".txt">
+    </div>
+
+    <!-- Container for decoded videos -->
+    <div id="output-container"></div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const outputContainer = document.getElementById('output-container');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('hover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('hover');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            const txtFiles = Array.from(files).filter(file => file.name.endsWith('.txt') || file.type === "text/plain");
+            
+            if (txtFiles.length === 0) {
+                alert("No valid .txt files detected.");
+                return;
+            }
+
+            txtFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+
+            outputContainer.innerHTML = '';
+
+            txtFiles.forEach((file, index) => {
+                const cardId = `file-card-${index}-${Date.now()}`;
+                createPlaceholderCard(file.name, file.size, cardId);
+                
+                readTextFile(file, cardId);
+            });
+        }
+
+        function createPlaceholderCard(name, size, cardId) {
+            const formattedSize = (size / 1024).toFixed(2) + ' KB';
+            const card = document.createElement('div');
+            card.className = 'file-card';
+            card.id = cardId;
+            
+            card.innerHTML = `
+                <div class="file-info">
+                    <div>
+                        <span class="file-name">${name}</span>
+                        <span class="file-size">(${formattedSize})</span>
+                    </div>
+                </div>
+                <div class="video-container" id="container-${cardId}">
+                    <span class="loading-text">Decoding video data...</span>
+                </div>
+            `;
+
+            outputContainer.appendChild(card);
+        }
+
+        function readTextFile(file, cardId) {
+            const reader = new FileReader();
+            reader.readAsText(file);
+            
+            reader.onload = function(e) {
+                let textContent = e.target.result.trim();
+                
+                // Prepend correct MP4 data syntax header if absent
+                if (!textContent.startsWith('data:video/')) {
+                    textContent = textContent.replace(/\s/g, '');
+                    textContent = `data:video/mp4;base64,${textContent}`;
+                }
+
+                // Inject the completed video element with playback controls into layout slot
+                const targetContainer = document.getElementById(`container-${cardId}`);
+                if (targetContainer) {
+                    targetContainer.innerHTML = `
+                        <video controls preload="metadata">
+                            <source src="${textContent}" type="video/mp4">
+                            <span class="error-msg">❌ Your browser does not support HTML5 video elements.</span>
+                        </video>
+                    `;
+                    
+                    // Wire up error tracking if the video fails to load due to bad data
+                    const videoElement = targetContainer.querySelector('video');
+                    videoElement.onerror = function() {
+                        handleVideoError(targetContainer);
+                    };
+                }
+            };
+        }
+
+        function handleVideoError(containerNode) {
+            containerNode.innerHTML = `<span class="error-msg">❌ Failed to display video. The text inside this file might not be a valid Base64 MP4 string or contains corrupted chunks.</span>`;
+        }
+    </script>
+</body>
+</html>
