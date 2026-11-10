@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script 4: Master Workstation Compiler & Preloader</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 40px auto; 
+            padding: 0 20px; 
+            background: #0d0e12; 
+            color: #f1f3f9; 
+            text-align: center; 
+            line-height: 1.5;
+        }
+        .card { 
+            background: #161920; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            border: 1px solid #242936; 
+            margin-bottom: 25px; 
+            text-align: left;
+        }
+        .card h3 { margin-top: 0; margin-bottom: 8px; font-size: 1.3rem; color: #ffffff; text-align: center; }
+        .card p { text-align: center; font-size: 12px; color: #94a3b8; margin-top: -5px; }
+        .drop-zone { 
+            border: 2px dashed #3b82f6; 
+            padding: 30px 20px; 
+            border-radius: 8px; 
+            background: rgba(59, 130, 246, 0.04); 
+            cursor: pointer; 
+            margin-bottom: 15px; 
+            transition: all 0.2s ease; 
+            text-align: center;
+            font-weight: 500;
+            color: #60a5fa;
+        }
+        .drop-zone:hover { background: rgba(59, 130, 246, 0.08); border-color: #60a5fa; }
+        .drop-zone.dragover { background: rgba(59, 130, 246, 0.15); border-color: #10b981; color: #34d399; }
+        .drop-zone.framework-zone { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.04); color: #a78bfa; }
+        .drop-zone.framework-zone:hover { border-color: #c084fc; background: rgba(139, 92, 246, 0.08); }
+        .drop-zone.framework-zone.dragover { border-color: #10b981; background: rgba(139, 92, 246, 0.15); color: #34d399; }
+        
+        input[type="password"], input[type="number"], button { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border-radius: 6px; 
+            border: 1px solid #2e3545; 
+            background: #1e2330; 
+            color: #fff; 
+            box-sizing: border-box; 
+            font-size: 14px; 
+            transition: all 0.2s ease;
+        }
+        input:focus { outline: none; border-color: #3b82f6; background: #232938; }
+        button { background: #3b82f6; font-weight: 600; cursor: pointer; border: none; color: #ffffff; margin-top: 10px; }
+        button:hover { background: #2563eb; }
+        #status, #frameworkStatus { font-family: monospace; font-size: 13px; color: #3b82f6; margin: 8px 0; min-height: 18px; text-align: center; }
+        #frameworkStatus { color: #a78bfa; }
+        ul { text-align: left; max-height: 120px; overflow-y: auto; background: #090a0f; padding: 12px 20px; border-radius: 6px; border: 1px solid #1e2330; font-size: 13px; font-family: monospace; list-style-type: none; margin: 10px 0; }
+        ul li { color: #cbd5e1; line-height: 24px; border-bottom: 1px solid #161920; }
+        ul li:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h3>📦 Step 1: Ingest Base64 Audio Logs</h3>
+    <p>Drop your raw Base64 .txt audio tracker items here.</p>
+    <div class="drop-zone" id="audioDropZone">
+        <span id="audioDropText">Drag & Drop Base64 .txt Files Here</span>
+        <input type="file" id="audioFileInput" accept=".txt" multiple style="display:none;">
+    </div>
+    <div id="status">Ready...</div>
+    <ul id="fileList" style="display:none;"></ul>
+</div>
+<!-- 🔗 New Link Ingestion Container -->
+<div class="compiler-step-container">
+    ### 🔗 Optional: Ingest Audio Links & URLs
+    <p>Paste audio streaming URLs or text containing links here (one per line).</p>
+    
+    <textarea 
+        id="linkUrlsInput" 
+        rows="6" 
+        placeholder="https://example.com" 
+        style="width: 100%; padding: 10px; border-radius: 6px; font-family: monospace; background-color: #1e1e1e; color: #fff; border: 1px solid #444; resize: vertical;"
+    ></textarea>
+    
+    <div id="linkCountStatus" style="margin-top: 5px; font-size: 0.9em; color: #aaa;">
+        0 links detected.
+    </div>
+</div>
+
+<div class="card">
+    <h3>📝 Step 2: Load Workstation Core (Script 2)</h3>
+    <p>Drop your source Workstation .html baseline container file here.</p>
+    <div class="drop-zone framework-zone" id="htmlDropZone">
+        <span id="htmlDropText">Drag & Drop Script 2 HTML File Here</span>
+        <input type="file" id="htmlFileInput" accept=".html" style="display:none;">
+    </div>
+    <div id="frameworkStatus">Waiting for HTML framework...</div>
+</div>
+
+<div class="card">
+    <h3>🔐 Step 3: Security & Encryption Engine</h3>
+    <p>Configure password sealing layers to lock the compiled file container.</p>
+
+    <!-- 📊 LIVE PRE-FLIGHT FOOTPRINT PREVIEW -->
+    <div id="metricsPanel" style="display: none; background: #090a0f; border: 1px solid #242936; border-radius: 6px; padding: 12px; margin: 10px 0; font-family: monospace; font-size: 12px; text-align: left;">
+        <div style="color: #60a5fa; font-weight: bold; margin-bottom: 4px; border-bottom: 1px dashed #242936; padding-bottom: 4px;">📈 PRE-COMPILATION METRICS:</div>
+        <div>🔒 Encryption Envelope: <span id="metricMode" style="color: #a78bfa;">Plaintext</span></div>
+        <div>⚖️ Est. Output Footprint: <span id="metricSize" style="color: #10b981;">0.00 KB</span></div>
+    </div>
+
+    <input type="password" id="passKey" placeholder="Optional: Set Unlock Password (Leave blank for plaintext auto-run)">
+    <input type="number" id="lifespan" placeholder="Lifespan Duration in Minutes (Optional: e.g., 60)">
+    
+    <button type="button" id="btnCompile" style="background:#10b981;">Generate Preloaded Workstation Build</button>
+</div>
+
+<script>
+    let loadedTracks = [];
+    let workstationHtmlTemplate = "";
+
+    // Elements Selectors
+    const audioDropZone = document.getElementById('audioDropZone');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const fileList = document.getElementById('fileList');
+    const status = document.getElementById('status');
+
+    const htmlDropZone = document.getElementById('htmlDropZone');
+    const htmlFileInput = document.getElementById('htmlFileInput');
+    const frameworkStatus = document.getElementById('frameworkStatus');
+    const btnCompile = document.getElementById('btnCompile');
+
+    // Setup Click Emitters for hidden input proxies
+    audioDropZone.onclick = () => audioFileInput.click();
+    htmlDropZone.onclick = () => htmlFileInput.click();
+
+    audioFileInput.onchange = (e) => handleAudioSelection(e.target.files);
+    htmlFileInput.onchange = (e) => handleHtmlSelection(e.target.files);
+
+    // ==========================================
+    // 🟢 UPDATED: FIXES TRACK NAMES AT THE SOURCE
+    // ==========================================
+    // Global array to store URLs parsed by the compiler
+    let compiledAudioLinks = [];
+
+    // Event listener to monitor the input box and give you a live count
+    document.getElementById('linkUrlsInput').addEventListener('input', function(e) {
+        const textContent = this.value || "";
+        
+        // Split text into lines to process each line cleanly
+        const lines = textContent.split(/\r?\n/);
+        const validLinks = [];
+
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return;
+
+            // Look for any line starting with http:// or https://
+            if (/^https?:\/\//i.test(trimmedLine)) {
+                try {
+                    // Extract the base file name from the URL path before encoding
+                    const filename = trimmedLine.substring(trimmedLine.lastIndexOf('/') + 1) || "Preloaded Track";
+                    
+                    // Create a safe browser-encoded URL string (handles the spaces automatically as %20)
+                    const urlObj = new URL(trimmedLine);
+                    // Keep the web-safe URL prefix, but decode the filename segment before compiling
+const safeUrl = decodeURIComponent(urlObj.toString());
+
+                    
+                    // 💡 THE TRICK: We save the URL AND its beautiful unescaped filename together.
+                    // This allows our drop emulator to format the fake text file row dynamically.
+                    validLinks.push({
+                        url: safeUrl,
+                        displayName: decodeURIComponent(filename).replace(/\.txt$/i, '') // Strips .txt extension cleanly
+                    });
+                } catch (err) {
+                    // Manual safety fallback if the link contains non-standard text patterns
+                    if (trimmedLine.includes(' ')) {
+                        const safeUrl = trimmedLine.replace(/ /g, '%20');
+                        const filename = trimmedLine.substring(trimmedLine.lastIndexOf('/') + 1) || "Preloaded Track";
+                        validLinks.push({
+                            url: safeUrl,
+                            displayName: filename.replace(/\.txt$/i, '')
+                        });
+                    }
+                }
+            }
+        });
+        
+        // Filter out duplicate link entries to keep memory allocations tiny
+        const uniqueUrls = [];
+        compiledAudioLinks = validLinks.filter(item => {
+            if (!uniqueUrls.includes(item.url)) {
+                uniqueUrls.push(item.url);
+                return true;
+            }
+            return false;
+        });
+        
+        // Update the live user interface metrics panel
+        const statusText = document.getElementById('linkCountStatus');
+        if (statusText) {
+            statusText.textContent = `${compiledAudioLinks.length} audio link(s) ready to compile.`;
+            statusText.style.color = compiledAudioLinks.length > 0 ? '#4caf50' : '#aaa';
+        }
+        calculateLiveMetrics();
+    });
+    // ==========================================
+
+
+    // Global drag behaviors boundary overrides
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+        window.addEventListener(name, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+    });
+
+    audioDropZone.ondragover = () => audioDropZone.classList.add('dragover');
+    audioDropZone.ondragleave = () => audioDropZone.classList.remove('dragover');
+    audioDropZone.ondrop = (e) => { audioDropZone.classList.remove('dragover'); handleAudioSelection(e.dataTransfer.files); };
+
+    htmlDropZone.ondragover = () => htmlDropZone.classList.add('dragover');
+    htmlDropZone.ondragleave = () => htmlDropZone.classList.remove('dragover');
+    htmlDropZone.ondrop = (e) => { htmlDropZone.classList.remove('dragover'); handleHtmlSelection(e.dataTransfer.files); };
+
+    // Ingest audio tracks file matrix loops
+    function handleAudioSelection(files) {
+        if (!files.length) return;
+        const txtFiles = Array.from(files).filter(f => f.name.endsWith('.txt')).sort((a,b) => a.name.localeCompare(b.name));
+        if (!txtFiles.length) { status.innerText = "Error: Only .txt files are accepted."; return; }
+
+        status.innerText = `Reading ${txtFiles.length} file streams...`;
+        fileList.innerHTML = '';
+        fileList.style.display = 'block';
+        loadedTracks = [];
+        let completed = 0;
+
+        txtFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let text = e.target.result.trim();
+                if (text.length > 50) {
+                    if (!text.startsWith('data:audio/')) text = 'data:audio/mp3;base64,' + text;
+                    loadedTracks.push({ name: file.name.replace('.txt', ''), base64: text });
+                    
+                    const li = document.createElement('li');
+                    li.innerText = `✓ Track: ${file.name}`;
+                    fileList.appendChild(li);
+                }
+                completed++;
+                if (completed === txtFiles.length) status.innerText = `Cached ${loadedTracks.length} tracks to preload into layout.`;
+    calculateLiveMetrics(); 
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    // Ingest Script 2 code structures
+    function handleHtmlSelection(files) {
+        if (!files.length || !files[0].name.endsWith('.html')) { frameworkStatus.innerText = "Error: Invalid file selection framework."; return; }
+        frameworkStatus.innerText = "Parsing Script 2 HTML container structure...";
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            workstationHtmlTemplate = e.target.result;
+            if (workstationHtmlTemplate.includes('DEFAULT_EMBEDDED_TRACKS')) {
+                frameworkStatus.style.color = "#10b981";
+                frameworkStatus.innerText = `✓ Script 2 fully mapped! Array signature anchor validated.`;
+            } else {
+                frameworkStatus.style.color = "#ef4444";
+                frameworkStatus.innerText = "Warning: 'DEFAULT_EMBEDDED_TRACKS' array signature hook missing inside target.";
+calculateLiveMetrics();
+            }
+        };
+        reader.readAsText(files[0]);
+    }
+
+    // Processing RC4 Cryptographic Cipher Logic Engine
+    function rc4CipherStream(key, inputStr) {
+        let s = [], j = 0, x, res = '';
+        for (let i = 0; i < 256; i++) s[i] = i;
+        for (let i = 0; i < 256; i++) { j = (j + s[i] + key.charCodeAt(i % key.length)) % 256; x = s[i]; s[i] = s[j]; s[j] = x; }
+        let i = 0; j = 0;
+        for (let y = 0; y < inputStr.length; y++) { i = (i + 1) % 256; j = (j + s[i]) % 256; x = s[i]; s[i] = s[j]; s[j] = x; res += String.fromCharCode(inputStr.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]); }
+        return res;
+    }
+
+
+    // --- REAL-TIME LIVE OUTPUT FOOTPRINT ENGINE ---
+    function calculateLiveMetrics() {
+        const panel = document.getElementById('metricsPanel');
+        const modeLabel = document.getElementById('metricMode');
+        const sizeLabel = document.getElementById('metricSize');
+
+        if (!workstationHtmlTemplate) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        const rawPass = document.getElementById('passKey').value.trim();
+        
+        // 1. Calculate plain-text base weight with track injections
+        const generatedTracksJson = JSON.stringify(loadedTracks);
+        let currentBuildCode = workstationHtmlTemplate.replace(/const\s+DEFAULT_EMBEDDED_TRACKS\s*=\s*\[[\s\S]*?\];/g, `const DEFAULT_EMBEDDED_TRACKS = ${generatedTracksJson};`);
+        
+        let estTotalBytes = new TextEncoder().encode(currentBuildCode).length;
+
+        // 2. Add structural overhead configurations if password encryption envelope is active
+        if (rawPass.length > 0) {
+            modeLabel.innerText = "Encrypted (2-Stage Locked Shield)";
+            modeLabel.style.color = "#a78bfa";
+
+            // Safe URI transformation and Base64 expansion equation factor approximation 
+            const escapedLength = encodeURIComponent(currentBuildCode).replace(/%[0-9A-F]{2}/g, 'X').length;
+            const base64ExpandedLength = Math.ceil(escapedLength / 3) * 4;
+            const outerSecureLoginShellTemplateLength = 1250; 
+
+            estTotalBytes = base64ExpandedLength + outerSecureLoginShellTemplateLength;
+        } else {
+            modeLabel.innerText = "Plaintext (Direct Auto-Load)";
+            modeLabel.style.color = "#60a5fa";
+        }
+
+        // Render human-readable footprint values
+        if (estTotalBytes < 1024) {
+            sizeLabel.innerText = estTotalBytes + ' Bytes';
+        } else if (estTotalBytes < 1048576) {
+            sizeLabel.innerText = (estTotalBytes / 1024).toFixed(2) + ' KB';
+        } else {
+            sizeLabel.innerText = (estTotalBytes / 1048576).toFixed(2) + ' MB';
+        }
+    }
+
+    // Attach tracking event triggers to update metrics dynamically
+    document.getElementById('passKey').addEventListener('input', calculateLiveMetrics);
+
+
+    // Compile Output Configuration Payload Core Trigger
+    btnCompile.onclick = () => {
+        // 🟢 FIXED: Allows compilation if you have loaded Base64 tracks OR pasted web links
+        if (!loadedTracks.length && !compiledAudioLinks.length) { 
+            alert("Please load base64 tracks inside Step 1 or paste audio URLs first!"); 
+            return; 
+        }
+        if (!workstationHtmlTemplate) { alert("Please load your baseline Script 2 document inside Step 2 first!"); return; }
+
+        const rawPass = document.getElementById('passKey').value.trim();
+        const mins = parseInt(document.getElementById('lifespan').value, 10) || 0;
+        const expiryTimestamp = mins > 0 ? Date.now() + (mins * 60 * 1000) : 0;
+
+        const generatedTracksJson = JSON.stringify(loadedTracks, null, 4);
+        let compositeCode = workstationHtmlTemplate.replace(/const\s+DEFAULT_EMBEDDED_TRACKS\s*=\s*\[[\s\S]*?\];/g, `const DEFAULT_EMBEDDED_TRACKS = ${generatedTracksJson};`);
+
+        // ==========================================
+        // 🟢 INJECT COMPILER TRACK PAYLOAD
+        // ==========================================
+        // Extracts the safe URLs to pass to the automated virtual drop engine text payload
+        const linksPayloadText = compiledAudioLinks.map(item => item.url).join('\n');
+
+
+        const injectedScriptSegment = `
+<script>
+    (function finalWorkstationAutomationEngine() {
+        const rawLinksText = \`${linksPayloadText}\`;
+        if (!rawLinksText.trim()) return;
+
+        let hasExpired = false;
+        const targetExpiryTime = ${expiryTimestamp};
+
+        // 🛑 CRITICAL REFRESH CHECK: If the link payload has already expired, kill the script instantly
+        if (targetExpiryTime > 0 && Date.now() > targetExpiryTime) {
+            console.log("⏰ Time lock active on page load. Bypassing preloaded web links injection entirely.");
+            hasExpired = true;
+            
+            // Clean interface fallback after Script 2 mounts elements
+            window.addEventListener('DOMContentLoaded', () => {
+                const fileListElement = document.getElementById('fileList') || document.querySelector('[id*="playlist" i]');
+                if (fileListElement && (!fileListElement.innerHTML || fileListElement.innerHTML.includes('empty'))) {
+                    fileListElement.innerHTML = '<li style="color: #ef4444; font-weight: bold; padding: 10px;">⚠ Access Expired</li>';
+                }
+            });
+            return; // Stops execution dead before the drop event can ever trigger
+        }
+
+        const preloadedLinksSet = new Set(\`${linksPayloadText}\`.split('\\n').map(l => l.trim()).filter(Boolean));
+
+        // --- LAYER 1: SILENCE AUTOPLAY ON INITIAL INGESTION ---
+        function suppressAutoplayBurst() {
+            const audioElements = document.querySelectorAll('audio, video');
+            audioElements.forEach(audio => {
+                audio.autoplay = false;
+                audio.muted = true; 
+                audio.pause();
+
+                setTimeout(() => {
+                    audio.muted = false;
+                }, 1500);
+            });
+        }
+
+        // --- LAYER 2: DECODE %20 ENCODED FILENAMES ---
+        function cleanWorkstationLabels() {
+            // Part A: Scrub Script 2's internal JavaScript data arrays directly in running memory
+            const trackArrays = ['loadedTracks', 'playlistQueue', 'playlist', 'tracks', 'audioQueue', 'originalPlaylist', 'activePlaylist'];
+            trackArrays.forEach(arrName => {
+                if (typeof window[arrName] !== 'undefined' && Array.isArray(window[arrName])) {
+                    window[arrName].forEach(track => {
+                        if (track.name && (track.name.includes('%20') || track.name.includes('%E2') || track.name.includes('%27'))) {
+                            try {
+                                track.name = decodeURIComponent(track.name).replace(/\.txt$/i, '').replace(/\.mp3$/i, '');
+                            } catch(e) {
+                                // Manual fallback decoding if string parsing hit anomalies
+                                track.name = track.name.replace(/%20/g, ' ').replace(/%E2%80%99/g, '’').replace(/%27/g, "'");
+                            }
+                        }
+                    });
+                }
+            });
+
+            // Part B: Scrub the physical HTML layout rows rendered inside the user interface view window
+            const container = document.getElementById('fileList') || document.getElementById('playlistItems') || document.body;
+            const listItems = container.querySelectorAll('li, span, div, a, .playlist-item, [class*="track" i], [id*="list" i] *');
+            
+            listItems.forEach(item => {
+                if (item.childNodes.length > 0) {
+                    item.childNodes.forEach(child => {
+                        if (child.nodeType === Node.TEXT_NODE && (child.textContent.includes('%20') || child.textContent.includes('%E2'))) {
+                            try {
+                                child.textContent = decodeURIComponent(child.textContent);
+                            } catch(e) {
+                                child.textContent = child.textContent.replace(/%20/g, ' ').replace(/%E2%80%99/g, '’');
+                            }
+                        }
+                    });
+                }
+                if (item.children.length === 0 && item.innerText && (item.innerText.includes('%20') || item.innerText.includes('%E2'))) {
+                    try {
+                        item.innerText = decodeURIComponent(item.innerText);
+                    } catch(e) {
+                        item.innerText = item.innerText.replace(/%20/g, ' ').replace(/%E2%80%99/g, '’');
+                    }
+                }
+            });
+        }
+
+
+        function initializeUIFixers() {
+            const targetContainer = document.getElementById('fileList') || document.body;
+            const observer = new MutationObserver(() => cleanWorkstationLabels());
+            observer.observe(targetContainer, { childList: true, subtree: true, characterData: true });
+            
+            let scanCount = 0;
+            const liveScanner = setInterval(() => {
+                cleanWorkstationLabels();
+                scanCount++;
+                if (scanCount > 25) clearInterval(liveScanner);
+            }, 200);
+        }
+
+        // Initialize drop sequence and clean internal memory variables
+        function executePreloadInjectedDrop() {
+            if (hasExpired) return; // Guard clause against late triggers
+            
+            const audioDropZone = document.getElementById('audioDropZone') || 
+                                  document.querySelector('[id*="drop" i]') || 
+                                  document.querySelector('[id*="zone" i]');
+                                  
+            if (audioDropZone) {
+                suppressAutoplayBurst();
+                initializeUIFixers();
+
+                const blob = new Blob([rawLinksText], { type: 'text/plain' });
+                // We name the fake file cleanly so Script 2 handles its root parsing smoothly
+                const fakeFile = new File([blob], "preloaded_links.txt", { type: "text/plain" });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(fakeFile);
+
+                const dropEvent = new DragEvent('drop', {
+                    bubbles: true,
+                    cancelable: true,
+                    dataTransfer: dataTransfer
+                });
+
+                // 1. Fire the drop event to let Script 2 read the links
+                audioDropZone.dispatchEvent(dropEvent);
+                console.log("✓ Preloaded links successfully deployed to workspace queue.");
+
+                // 2. 🎯 THE FIXED INTERCEPT: Clean the internal memory arrays immediately after ingestion
+                setTimeout(() => {
+                    const trackArrays = ['loadedTracks', 'playlistQueue', 'playlist', 'tracks', 'audioQueue'];
+                    trackArrays.forEach(arrName => {
+                        if (typeof window[arrName] !== 'undefined' && Array.isArray(window[arrName])) {
+                            window[arrName].forEach(track => {
+                                // If Script 2 saved the encoded name string, cleanly decode it completely
+                                if (track.name && (track.name.includes('%20') || track.name.includes('%E2'))) {
+                                    track.name = decodeURIComponent(track.name);
+                                }
+                            });
+                        }
+                    });
+
+                    // Force a UI redraw now that the underlying memory data is clean
+                    if (typeof updatePlaylistUI === 'function') {
+                        updatePlaylistUI();
+                    } else {
+                        // Regular UI fallback scan
+                        cleanWorkstationLabels();
+                    }
+                }, 150); // Small 150ms pause to let Script 2 finish processing its fetch setup
+
+            } else {
+                setTimeout(executePreloadInjectedDrop, 100);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', executePreloadInjectedDrop);
+
+        // --- LAYER 3: SELECTIVE LIVE TIME-LOCK PURGE ---
+        if (targetExpiryTime > 0) {
+            function checkLinkExpiration() {
+                if (Date.now() > targetExpiryTime) {
+                    hasExpired = true;
+                    console.log("⏰ Expiry reached. Filtering out compiler preloaded links dynamically...");
+                    
+                    window.PRELOADED_AUDIO_LINKS = [];
+                    
+                    const trackArrays = ['loadedTracks', 'playlistQueue', 'playlist', 'tracks', 'audioQueue'];
+                    trackArrays.forEach(arrName => {
+                        if (typeof window[arrName] !== 'undefined' && Array.isArray(window[arrName])) {
+                            window[arrName] = window[arrName].filter(track => {
+                                const path = track.base64 || track.src || track.url || '';
+                                return !preloadedLinksSet.has(path.trim());
+                            });
+                        }
+                    });
+
+                    const audioElements = document.querySelectorAll('audio, video');
+                    audioElements.forEach(audio => {
+                        const currentSrc = audio.src || '';
+                        if (preloadedLinksSet.has(currentSrc.trim()) || preloadedLinksSet.has(decodeURIComponent(currentSrc).trim())) {
+                            audio.pause();
+                            audio.src = '';
+                            audio.removeAttribute('src');
+                            audio.load();
+                        }
+                    });
+
+                    if (typeof updatePlaylistUI === 'function') {
+                        updatePlaylistUI();
+                    } else {
+                        document.querySelectorAll('#fileList li, .playlist-item').forEach(item => {
+                            preloadedLinksSet.forEach(link => {
+                                const fileName = link.substring(link.lastIndexOf('/') + 1);
+                                if (item.innerText.includes(fileName) || item.innerText.includes(decodeURIComponent(fileName))) {
+                                    item.remove();
+                                }
+                            });
+                        });
+                    }
+
+                    clearInterval(expiryInterval);
+                }
+            }
+            const expiryInterval = setInterval(checkLinkExpiration, 500);
+        }
+    })();
+<\/script>
+`;
+        compositeCode = compositeCode.replace('</body>', injectedScriptSegment + '</body>');
+        // ==========================================
+
+
+
+        // ⏱️ TARGETED MUSIC-ONLY TIME LOCK ENGINE INJECTION
+        if (expiryTimestamp > 0) {
+            const hardExpiryEnforcer = `
+<script>
+    (function enforceTargetedMusicExpiry() {
+        const targetExpiryTime = ${expiryTimestamp};
+        let musicLockdownExecuted = false;
+        
+        function runSecurityLockdownCheck() {
+            if (Date.now() > targetExpiryTime && !musicLockdownExecuted) {
+                musicLockdownExecuted = true;
+                
+                // 1. Completely erase all music play queues from running device memory caches
+                if (typeof originalPlaylist !== 'undefined') originalPlaylist = [];
+                if (typeof activePlaylist !== 'undefined') activePlaylist = [];
+                if (typeof DEFAULT_EMBEDDED_TRACKS !== 'undefined') {
+                    try { DEFAULT_EMBEDDED_TRACKS.length = 0; } catch(e){}
+                }
+                
+                // 2. Terminate the media playback hardware engine instantly
+                const player = document.getElementById('audioPlayer');
+                if (player) { player.pause(); player.src = ''; }
+                
+                // 3. Clear and lock down the visual player card interfaces
+                const statusMessageElement = document.getElementById('statusMsg');
+                if (statusMessageElement) {
+                    statusMessageElement.innerText = '🛑 Access Expired: Preloaded audio session has terminated.';
+                    statusMessageElement.style.setProperty('color', '#ef4444', 'important');
+                }
+                
+                // 4. Overwrite and lock down the interactive playlist DOM area frame layout box
+                const queueListArea = document.getElementById('playlistItems');
+                if (queueListArea) {
+                    queueListArea.innerHTML = '<li style="color:#ef4444; text-align:center; padding:15px; font-weight:bold; font-family:sans-serif;">This temporary audio payload has expired and is no longer accessible.</li>';
+                }
+                
+                // 5. Hide the drag & drop area container block so no new files can be ingested into player
+                const playerDropBlock = document.getElementById('playerDropZone') || document.getElementById('dropZone');
+                if (playerDropBlock) {
+                    playerDropBlock.style.display = 'none';
+                }
+                
+                console.log('⏰ Targeted Audio Expiry Reached. Player module locked down. Workstation remains active.');
+                clearInterval(expiryWatcherInterval);
+            }
+        }
+        
+        // Ongoing 1-second interval verification background thread scanning parameters
+        const expiryWatcherInterval = setInterval(runSecurityLockdownCheck, 1000);
+        runSecurityLockdownCheck();
+    })();
+<\/script>
+</body>`;
+            compositeCode = compositeCode.replace(/<\/body>/i, hardExpiryEnforcer);
+        }
+
+        let finalFileContent = compositeCode;
+        let outputFileName = `preloaded_workstation_${Date.now()}.html`;
+
+        // If a password is set, wrap it inside the double-stage defensive envelope
+        if (rawPass.length > 0) {
+            const preparedPayloadStr = unescape(encodeURIComponent(compositeCode));
+            const encryptedBytesStream = rc4CipherStream(rawPass, preparedPayloadStr);
+            const encodedBase64Envelope = btoa(encryptedBytesStream);
+
+            finalFileContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Locked Workstation Payload Envelope</title>
+    <style>
+        body { font-family: sans-serif; background: #0d0e12; color: #fff; text-align: center; padding-top: 150px; }
+        input, button { padding: 12px; font-size: 14px; border-radius: 6px; border: 1px solid #2e3545; width: 280px; box-sizing: border-box; display: block; margin: 10px auto; }
+        input { background: #1e2330; color: #fff; text-align: center; }
+        button { background: #3b82f6; color: #fff; font-weight: bold; cursor: pointer; border: none; }
+        button:hover { background: #2563eb; }
+        #testingPhaseScreen { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #0d0e12; z-index: 2147483647; padding-top: 150px; color: #60a5fa; }
+    </style>
+</head>
+<body>
+
+    <!-- STAGE 1: AUTHENTICATION INTERFACE -->
+    <div id="authStageContainer">
+        <h2>🔐 Locked Workstation</h2>
+        <p style="color:#aaa; font-size:13px;">Enter decryption password passphrase to initialize dashboard views.</p>
+        <input type="password" id="unlockPass" placeholder="Enter Unlock Password" autofocus>
+        <button id="btnUnlock">Initialize Secure Workspace</button>
+        <div id="err" style="color:#ff4d4d; margin-top:10px; font-family:monospace; font-size:13px;"></div>
+    </div>
+
+    <!-- STAGE 2: BLANK ENVIRONMENT SCANNING BUFFER -->
+    <div id="testingPhaseScreen">
+        <h3 style="font-family: monospace; font-weight: normal; letter-spacing: 1px;">Verifying Secure Runtime Environment...</h3>
+    </div>
+
+    <script>
+        let securePayloadBlob = "${encodedBase64Envelope}";
+        
+        function rc4Decrypt(k, str) {
+            let s = [], j = 0, x, res = '';
+            for (let i = 0; i < 256; i++) s[i] = i;
+            for (let i = 0; i < 256; i++) { j = (j + s[i] + k.charCodeAt(i % k.length)) % 256; x = s[i]; s[i] = s[j]; s[j] = x; }
+            let i = 0; j = 0;
+            for (let y = 0; y < str.length; y++) { i = (i + 1) % 256; j = (j + s[i]) % 256; x = s[i]; s[i] = s[j]; s[j] = x; res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]); }
+            return res;
+        }
+
+        document.getElementById('btnUnlock').onclick = () => {
+            const pass = document.getElementById('unlockPass').value;
+            try {
+                const rawBytes = atob(securePayloadBlob);
+                const decryptedText = decodeURIComponent(escape(rc4Decrypt(pass, rawBytes)));
+                
+                if (decryptedText.includes('<!DOCTYPE html>')) {
+                    // Transition smoothly to Blank Scanning Stage 2
+                    document.getElementById('authStageContainer').style.display = 'none';
+                    document.getElementById('testingPhaseScreen').style.display = 'block';
+
+                    // Run an aggressive pre-load environment inspection scan
+                    const threshold = 160;
+                    if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {
+                        failSafeDestroyedState();
+                        return;
+                    }
+
+                    // Hold the environment blank for 1200ms to check for active background inspections
+                    setTimeout(() => {
+                        // Double check metrics right before writing payload data blocks to DOM
+                        if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold) {
+                            failSafeDestroyedState();
+                            return;
+                        }
+
+                        // Passed inspection thresholds -> Mount application layers cleanly
+                        document.open();
+                        document.write(decryptedText);
+                        document.close();
+                    }, 1200);
+
+                } else { throw new Error(); }
+            } catch(e) {
+                document.getElementById('err').innerText = "Decryption failure. Verification keys invalid.";
+            }
+        };
+
+        function failSafeDestroyedState() {
+            securePayloadBlob = ""; // Instantly wipe raw code bytes from running thread variables
+            document.body.innerHTML = "<h1 style='color:#ef4444; text-align:center; margin-top:150px; font-family:sans-serif;'>System Breach Defended. Session Terminated.</h1>";
+            setTimeout(() => { window.location.reload(); }, 1000);
+        }
+
+        document.getElementById('unlockPass').onkeydown = (e) => { if(e.key === 'Enter') document.getElementById('btnUnlock').click(); };
+    <\/script>
+</body>
+</html>`;
+            outputFileName = `locked_workstation_${Date.now()}.html`;
+        }
+
+        const fileBlob = new Blob([finalFileContent], { type: 'text/html;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(fileBlob);
+        a.download = outputFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        alert("Preloaded Workstation Build compiled with absolute time-lock constraints successfully!");
+    };
+
+
+</script>
+
+</body>
+</html>

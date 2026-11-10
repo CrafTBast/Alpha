@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>PH Clock - Magnetic Sticky Snow</title>
+    <style>
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: #0c1030; /* Night Mode default background */
+            overflow: hidden !important;
+            position: relative;
+            transition: background-color 0.5s ease;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .clock-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #clock {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 5rem;
+            font-weight: bold;
+            user-select: none;
+            white-space: nowrap;
+            padding: 20px;
+            transition: color 0.5s ease, text-shadow 0.5s ease;
+        }
+
+        /* --- CONTROL BUTTONS --- */
+        .ui-btn {
+            position: absolute;
+            bottom: 5px; 
+            z-index: 20;
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border: none;
+            outline: none;
+            padding: 4px 10px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border-radius: 3px;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .ui-btn:hover {
+            opacity: 1;
+            background: #ffffff;
+            color: #0c1030;
+        }
+
+        #themeToggleBtn { left: 15px; }
+        #nightToggleBtn { right: 85px; } /* Shifted left to make room for magnetism toggle */
+        #magnetToggleBtn { right: 15px; } /* Placed on the lower right edge */
+
+        /* Disabled indicator profile style */
+        .ui-btn.btn-disabled {
+            text-decoration: line-through;
+            opacity: 0.25;
+        }
+        .ui-btn.btn-disabled:hover {
+            opacity: 0.6;
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+        }
+
+        .day-active .ui-btn {
+            background: rgba(12, 35, 64, 0.2);
+            color: #0c2340;
+        }
+        .day-active .ui-btn:hover {
+            background: #0c2340;
+            color: #ffffff;
+        }
+        .day-active .ui-btn.btn-disabled:hover {
+            background: rgba(12, 35, 64, 0.2);
+            color: #0c2340;
+        }
+
+        /* --- SLIDER CONTAINER --- */
+        .slider-container {
+            position: absolute;
+            bottom: 5px; 
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 250px;
+            opacity: 0.4;
+            transition: opacity 0.2s ease;
+        }
+
+        .slider-container:hover {
+            opacity: 1;
+        }
+
+        .particle-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+            border: none;
+            cursor: pointer;
+            transition: background 0.5s ease;
+        }
+
+        .day-active .particle-slider {
+            background: rgba(12, 35, 64, 0.2);
+        }
+
+        .particle-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            border: none;
+            transition: background 0.5s ease;
+        }
+
+        .day-active .particle-slider::-webkit-slider-thumb { background: #0c2340; }
+    </style>
+</head>
+<body>
+
+    <canvas id="snowCanvas"></canvas>
+
+    <div class="clock-wrapper">
+        <div id="clock">--:---- --</div>
+    </div>
+
+    <button id="themeToggleBtn" class="ui-btn">MODE</button>
+    <button id="nightToggleBtn" class="ui-btn">NIGHT</button>
+    <button id="magnetToggleBtn" class="ui-btn">MAGNET</button>
+
+    <div class="slider-container">
+        <input type="range" min="5" max="60" value="40" class="particle-slider" id="pSlider" title="Adjust Snow Particles">
+    </div>
+
+    <script>
+
+
+
+        // ==========================================
+        // 1. ENVIRONMENT STATE MANAGEMENT
+        // ==========================================
+        const clockEl = document.getElementById('clock');
+        const themeBtn = document.getElementById('themeToggleBtn');
+        const nightBtn = document.getElementById('nightToggleBtn');
+        const magnetBtn = document.getElementById('magnetToggleBtn');
+        
+        let currentTheme = 'light'; 
+        let isNightMode = true; 
+        let isMagnetismEnabled = true; // Global state tracking flag for attraction dynamics
+
+        const environmentColors = {
+            day: {
+                sky: '#87cefa', mountain1: '#7bc2f0', mountain2: '#6cb0e0', mountain3: '#5c9ed0',
+                clockShadow: '0px 4px 20px rgba(12, 35, 64, 0.6), 0px 0px 10px rgba(12, 35, 64, 0.4)'
+            },
+            night: {
+                sky: '#0c1030', mountain1: '#1a1f4c', mountain2: '#13163a', mountain3: '#0b0d26',
+                clockShadow: '0px 0px 25px rgba(34, 211, 238, 0.6), 0px 0px 10px rgba(255, 255, 255, 0.5)'
+            }
+        };
+
+        function updateDisplayStyles() {
+            const currentEnv = isNightMode ? environmentColors.night : environmentColors.day;
+            document.body.style.backgroundColor = currentEnv.sky;
+            
+            if (currentTheme === 'dark') {
+                clockEl.style.color = '#0c2340';
+                clockEl.style.textShadow = '0px 0px 20px rgba(255, 255, 255, 0.9)';
+            } else {
+                clockEl.style.color = '#ffffff';
+                clockEl.style.textShadow = currentEnv.clockShadow;
+            }
+
+            if (!isNightMode) { document.body.classList.add('day-active'); } 
+            else { document.body.classList.remove('day-active'); }
+        }
+
+        themeBtn.addEventListener('click', function() {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            updateDisplayStyles();
+        });
+
+        nightBtn.addEventListener('click', function() {
+            isNightMode = !isNightMode;
+            updateDisplayStyles();
+        });
+
+        magnetBtn.addEventListener('click', function() {
+            isMagnetismEnabled = !isMagnetismEnabled;
+            if (isMagnetismEnabled) {
+                magnetBtn.classList.remove('btn-disabled');
+                // Instantly un-stick elements to clean memory parameters if activated
+                for (let i = 0; i < flakesArray.length; i++) { flakesArray[i].isStuck = false; }
+            } else {
+                magnetBtn.classList.add('btn-disabled');
+                for (let i = 0; i < flakesArray.length; i++) { flakesArray[i].isStuck = false; }
+            }
+        });
+
+        updateDisplayStyles();
+
+        // ==========================================
+        // 2. CLOCK LOGIC (Forced UTC+8 Philippine Time)
+        // ==========================================
+function runClock() {
+    try {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Manila',
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        });
+        clockEl.textContent = formatter.format(now);
+    } catch (e) { 
+        console.error(e); 
+    }
+}
+
+        runClock();
+        setInterval(runClock, 1000);
+
+        // ==========================================
+        // 3. INTERACTIVE VISUALS ENGINE
+        // ==========================================
+        const canvas = document.getElementById('snowCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let w = canvas.width = window.innerWidth;
+        let h = canvas.height = window.innerHeight;
+
+        let currentMaxFlakes = 40; 
+        const flakesArray = [];
+        
+        // MULTI-LAYER AMBIENT SMOKE POOL
+        const smokeParticles = [];
+        const totalSmokeVolume = 140; 
+
+        // INTERACTION VARIABLES
+        const mouse = { 
+            x: null, y: null, 
+            radius: 180,       // Distance where attraction pulls snow
+            vx: 0, vy: 0,      
+            lastX: null, lastY: null 
+        };
+        
+        let auroraTime = 0;
+        let isMouseDown = false;
+
+        window.addEventListener('mousemove', function(e) {
+            mouse.x = e.clientX; 
+            mouse.y = e.clientY; 
+
+            if (mouse.lastX !== null && mouse.lastY !== null) {
+                mouse.vx = mouse.x - mouse.lastX;
+                mouse.vy = mouse.y - mouse.lastY;
+            }
+            mouse.lastX = mouse.x;
+            mouse.lastY = mouse.y;
+        });
+
+        window.addEventListener('mouseout', function() { 
+            mouse.x = null; mouse.y = null; 
+            mouse.lastX = null; mouse.lastY = null;
+            mouse.vx = 0; mouse.vy = 0;
+            isMouseDown = false; 
+        });
+
+        window.addEventListener('mouseup', function() { isMouseDown = false; });
+        window.addEventListener('mousedown', function(e) {
+            if (e.target.id !== 'pSlider' && e.target.id !== 'themeToggleBtn' && e.target.id !== 'nightToggleBtn' && e.target.id !== 'magnetToggleBtn') {
+                isMouseDown = true;
+            }
+        });
+
+        function handleInteractiveForces() {
+            if (mouse.x === null || mouse.y === null) return;
+
+            // --- CONDITION A: CLICKED / PRESSED (EXPLOSIVE EXPULSION CLEARANCE) ---
+            if (isMouseDown) {
+                const blastRadius = 350; 
+                const blastPower = 4;   
+
+                // Blast Snowflakes out fully (Maintained regardless of magnetism state)
+                for (let i = 0; i < flakesArray.length; i++) {
+                    let f = flakesArray[i];
+                    f.isStuck = false; 
+                    const dx = f.x - mouse.x; const dy = f.y - mouse.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < blastRadius) {
+                        const force = (blastRadius - distance) / blastRadius;
+                        f.vx += (dx / distance) * force * blastPower * 0.3;
+                        f.vy += (dy / distance) * force * blastPower * 0.3 - 0.1; 
+                    }
+                }
+
+                // Minor elastic displacement ripple inside smoke arrays
+                for (let i = 0; i < smokeParticles.length; i++) {
+                    let p = smokeParticles[i];
+                    const dx = p.x - mouse.x; const dy = p.y - mouse.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < blastRadius) {
+                        const force = (blastRadius - distance) / blastRadius;
+                        p.vx += (dx / distance) * force * blastPower * 0.02;
+                        p.vy += (dy / distance) * force * blastPower * 0.02;
+                    }
+                }
+            }
+            // --- CONDITION B: NOT PRESSED (STRONG MAGNETIC ATTRACTION + STICKING) ---
+            else {
+                // Only process pulling logic loops if magnetism toggle state is set to true
+                if (isMagnetismEnabled) {
+                    for (let i = 0; i < flakesArray.length; i++) {
+                        let f = flakesArray[i];
+                        
+                        if (f.isStuck) {
+                            f.x = mouse.x + f.stuckOffsetX;
+                            f.y = mouse.y + f.stuckOffsetY;
+                            continue;
+                        }
+
+                        const dx = mouse.x - f.x;
+                        const dy = mouse.y - f.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < mouse.radius) {
+                            if (distance < 12) {
+                                f.isStuck = true;
+                                f.stuckOffsetX = Math.random() * 24 - 12;
+                                f.stuckOffsetY = Math.random() * 24 - 12;
+                                f.vx = 0; f.vy = 0;
+                            } else {
+                                const pullForce = (mouse.radius - distance) / mouse.radius;
+                                f.x += (dx / distance) * pullForce * 6.5; 
+                                f.y += (dy / distance) * pullForce * 6.5;
+                            }
+                        }
+                    }
+                }
+            }
+
+            mouse.vx *= 0.85;
+            mouse.vy *= 0.85;
+        }
+
+        function drawTrueSnowflake(ctx, x, y, radius, rotation, designType) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(rotation);
+            if (designType === 0) {
+                for (let b = 0; b < 6; b++) {
+                    ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -radius); ctx.stroke();
+                    let fOff = radius * 0.4; let fLen = radius * 0.3; ctx.beginPath(); ctx.moveTo(0, -fOff); ctx.lineTo(-fLen, -fOff - fLen); ctx.moveTo(0, -fOff); ctx.lineTo(fLen, -fOff - fLen);
+                    let uOff = radius * 0.7; ctx.moveTo(0, -uOff); ctx.lineTo(-fLen * 0.6, -uOff - fLen * 0.6); ctx.moveTo(0, -uOff); ctx.lineTo(fLen * 0.6, -uOff - fLen * 0.6); ctx.stroke();
+                }
+            } else if (designType === 1) {
+                ctx.beginPath(); for (let b = 0; b < 6; b++) { ctx.rotate(Math.PI / 3); ctx.lineTo(0, -radius * 0.5); } ctx.closePath(); ctx.stroke();
+                for (let b = 0; b < 6; b++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, -radius * 0.5); ctx.lineTo(0, -radius); ctx.stroke(); }
+            } else {
+                for (let b = 0; b < 6; b++) {
+                    ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -radius); ctx.stroke();
+                    for (let step = 1; step <= 3; step++) { let fOff = radius * (step * 0.25); let fLen = radius * 0.25; ctx.beginPath(); ctx.moveTo(0, -fOff); ctx.lineTo(-fLen, -fOff); ctx.moveTo(0, -fOff); ctx.lineTo(fLen, -fOff); ctx.stroke(); }
+                }
+            }
+            ctx.restore();
+        }
+
+        function initSingleFlake(flake) {
+            flake.x = Math.random() * w;
+            flake.y = Math.random() * -h;
+            flake.radius = Math.random() * 40 + 4; 
+            flake.speedY = (flake.radius * 0.035) + Math.random() * 0.5 + 0.3;
+            flake.speedX = Math.random() * 0.4 - 0.2;
+            flake.designType = Math.floor(Math.random() * 3);
+            flake.rotation = Math.random() * Math.PI * 2;
+            flake.spinSpeed = (Math.random() * 0.015 - 0.0075);
+            
+            flake.isStuck = false;
+            flake.stuckOffsetX = 0;
+            flake.stuckOffsetY = 0;
+            
+            flake.vx = 0; flake.vy = 0;
+            flake.twinkleSpeed = Math.random() * 0.03 + 0.015;
+            flake.alphaPhase = Math.random() * Math.PI; 
+            flake.isTwinkler = Math.random() > 0.4; 
+        }
+
+        const slider = document.getElementById('pSlider');
+        function syncFlakePool() {
+            currentMaxFlakes = parseInt(slider.value, 10);
+            while (flakesArray.length < currentMaxFlakes) {
+                let item = {}; initSingleFlake(item); item.y = Math.random() * h; flakesArray.push(item);
+            }
+            if (flakesArray.length > currentMaxFlakes) { flakesArray.length = currentMaxFlakes; }
+        }
+        slider.addEventListener('input', syncFlakePool);
+
+        // ==========================================
+        // 4. REVERTED LINEAR PLASMA OVERLAY SHROUD
+        // ==========================================
+        function initSmokePool() {
+            smokeParticles.length = 0;
+            for (let i = 0; i < totalSmokeVolume; i++) {
+                const colorGroup = i % 3;
+                
+                let layerSpanWidth = (colorGroup === 1) ? (w * 0.70) : (w * 0.45);
+                let startXAnchor = (w / 2) - (layerSpanWidth / 2);
+                let randomSpawnX = startXAnchor + Math.random() * layerSpanWidth;
+
+                smokeParticles.push({
+                    x: randomSpawnX,
+                    y: h / 2,
+                    baseX: randomSpawnX, 
+                    baseY: h / 2, 
+                    streamType: colorGroup,
+                    baseRadius: Math.random() * 15 + 40, 
+                    alphaPhase: Math.random() * Math.PI * 2, 
+                    fadeSpeed: Math.random() * 0.008 + 0.004,
+                    phase: Math.random() * Math.PI * 2,
+                    frequency: 0.006 + (colorGroup * 0.004) + Math.random() * 0.006,
+                    heightPhase: Math.random() * Math.PI * 2,
+                    heightSpeed: Math.random() * 0.015 + 0.008,
+                    vx: 0,
+                    vy: 0
+                });
+            }
+        }
+        
+        initSmokePool();
+        syncFlakePool();
+
+        window.addEventListener('resize', function() {
+            w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight;
+            initSmokePool();
+        });
+
+        function updateAndDrawSmoke() {
+            let screenCenterY = h / 2;
+
+            ctx.save();
+            ctx.globalCompositeOperation = "source-over";
+
+            for (let i = 0; i < smokeParticles.length; i++) {
+                let p = smokeParticles[i];
+                
+                p.phase += p.frequency;
+                p.alphaPhase += p.fadeSpeed; 
+                p.heightPhase += p.heightSpeed;
+
+                p.baseY = screenCenterY;
+
+                let chaoticCrossOffset = Math.sin(p.phase * 0.5 + p.streamType * 2.0) * 55;
+                let horizontalWaveOffset = Math.cos(p.phase * 0.8) * 12;
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                let targetX = p.baseX + horizontalWaveOffset;
+                let targetY = p.baseY + chaoticCrossOffset;
+
+                p.x += (targetX - p.x) * 0.04;
+                p.y += (targetY - p.y) * 0.04;
+
+                p.vx *= 0.94;
+                p.vy *= 0.94;
+
+                ctx.save();
+                let baseAlpha = Math.abs(Math.sin(p.alphaPhase));
+                
+                let smokeHeightSpan = 45 + Math.sin(p.heightPhase) * 20;
+                
+                let plasmaGrad = ctx.createLinearGradient(p.x, p.y - smokeHeightSpan, p.x, p.y + smokeHeightSpan);
+
+                let colorString = '255, 255, 255'; 
+                if (isNightMode) {
+                    if (p.streamType === 0) colorString = '6, 182, 212';   
+                    else if (p.streamType === 1) colorString = '16, 185, 129'; 
+                    else colorString = '236, 72, 153';                       
+                }
+
+                plasmaGrad.addColorStop(0, `rgba(${colorString}, 0)`);
+                plasmaGrad.addColorStop(0.5, `rgba(${colorString}, ${baseAlpha * 0.16})`); 
+                plasmaGrad.addColorStop(1, `rgba(${colorString}, 0)`);
+
+                ctx.fillStyle = plasmaGrad;
+                ctx.fillRect(p.x - p.baseRadius, p.y - smokeHeightSpan, p.baseRadius * 2, smokeHeightSpan * 2);
+                
+                ctx.restore();
+            }
+            ctx.restore(); 
+        }
+
+        function renderScene() {
+            ctx.clearRect(0, 0, w, h);
+            
+            handleInteractiveForces();
+            
+            const activeEnv = isNightMode ? environmentColors.night : environmentColors.day;
+
+            // A. BACKGROUND SKY AURORA
+            auroraTime += 0.0025; ctx.save(); ctx.globalCompositeOperation = isNightMode ? "screen" : "color-burn";
+            for (let wave = 0; wave < 3; wave++) {
+                ctx.beginPath(); let grad = ctx.createLinearGradient(0, 0, 0, h * 0.45); grad.addColorStop(0, "rgba(34, 197, 94, 0)");
+                if (wave === 0) { grad.addColorStop(0.25, isNightMode ? "rgba(34, 211, 238, 0.25)" : "rgba(16, 185, 129, 0.35)"); grad.addColorStop(0.55, isNightMode ? "rgba(34, 197, 94, 0.35)" : "rgba(56, 189, 248, 0.25)"); } 
+                else if (wave === 1) { grad.addColorStop(0.30, isNightMode ? "rgba(168, 85, 247, 0.20)" : "rgba(34, 197, 94, 0.30)"); grad.addColorStop(0.60, isNightMode ? "rgba(34, 211, 238, 0.20)" : "rgba(14, 165, 233, 0.20)"); } 
+                else { grad.addColorStop(0.35, "rgba(20, 183, 140, 0.25)"); grad.addColorStop(0.65, isNightMode ? "rgba(168, 85, 247, 0.15)" : "rgba(125, 211, 252, 0.15)"); }
+                grad.addColorStop(1, "rgba(0, 0, 0, 0)"); ctx.fillStyle = grad; ctx.moveTo(0, 0);
+                for (let x = 0; x <= w; x += 15) {
+                    let waveY = h * 0.06 + (wave * 35) + Math.sin(x * (0.004 + wave * 0.001) + auroraTime + wave) * 30 + Math.cos(x * 0.002 - auroraTime * (0.3 + wave * 0.1)) * 15;
+                    ctx.lineTo(x, waveY);
+                }
+                ctx.lineTo(w, 0); ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+
+            // B. MOUNTAINS
+            ctx.fillStyle = activeEnv.mountain1; ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, h * 0.70); ctx.lineTo(w * 0.20, h * 0.58); ctx.lineTo(w * 0.45, h * 0.68); ctx.lineTo(w * 0.70, h * 0.52); ctx.lineTo(w * 0.88, h * 0.64); ctx.lineTo(w, h * 0.58); ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = activeEnv.mountain2; ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, h * 0.78); ctx.lineTo(w * 0.35, h * 0.62); ctx.lineTo(w * 0.60, h * 0.74); ctx.lineTo(w * 0.80, h * 0.60); ctx.lineTo(w, h * 0.72); ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = activeEnv.mountain3; ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, h * 0.84); ctx.lineTo(w * 0.15, h * 0.76); ctx.lineTo(w * 0.50, h * 0.68); ctx.lineTo(w * 0.75, h * 0.80); ctx.lineTo(w, h * 0.74); ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+
+            // C. INTERWOVEN HIGH-VIBRANCY FORMLESS AURORA STRIP
+            updateAndDrawSmoke();
+
+            // D. RENDER INTERACTIVE SNOWFLAKES
+            for (let i = 0; i < flakesArray.length; i++) {
+                let f = flakesArray[i];
+                f.alphaPhase += f.twinkleSpeed;
+                let currentAlpha = f.isTwinkler ? 0.6 + Math.sin(f.alphaPhase) * 0.4 : 0.85;
+                
+                ctx.strokeStyle = `rgba(255, 255, 255, ${currentAlpha})`;
+                
+                if (f.radius > 30) { ctx.lineWidth = 2.2; }
+                else if (f.radius > 15) { ctx.lineWidth = 1.5; }
+                else { ctx.lineWidth = 0.9; }
+
+                f.rotation += f.spinSpeed;
+                drawTrueSnowflake(ctx, f.x, f.y, f.radius, f.rotation, f.designType);
+                
+                f.y += f.speedY + f.vy; 
+                f.x += f.speedX + f.vx;
+                f.vx *= 0.95; f.vy *= 0.95; 
+
+                if (f.y > h + 40 || f.x < -50 || f.x > w + 50) { 
+                    initSingleFlake(f); 
+                    f.y = -40; 
+                }
+            }
+
+            requestAnimationFrame(renderScene);
+        }
+
+        renderScene();
+
+
+// ==========================================
+// SELF-CONTAINED SCREEN WAKE LOCK MANAGER
+// ==========================================
+function initializeWakeLockButton() {
+    // 1. Automatically grab the button from the page or create one if missing
+    let btn = document.getElementById('wakeLockBtn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'wakeLockBtn';
+        btn.className = 'ui-btn';
+        btn.textContent = 'AWAKE';
+        btn.style.left = '85px'; // Adjust position so it sits cleanly next to MODE
+        document.body.appendChild(btn);
+    }
+
+    // Force base button styling properties to ensure smooth transitions
+    btn.style.transition = 'all 0.2s ease';
+
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+                btn.classList.add('active');
+                btn.textContent = 'LOCKED'; 
+                
+                // Dynamic Green Active States
+                btn.style.backgroundColor = 'rgba(16, 185, 129, 0.8)'; // Solid emerald green
+                btn.style.color = '#ffffff';
+                btn.style.opacity = '1';
+                btn.style.border = '1px solid #10b981';
+                
+                localStorage.setItem('pcWakeLockActive', 'true');
+                
+                wakeLock.addEventListener('release', () => {
+                    if (wakeLock !== null) { handleRelease(); }
+                });
+            }
+        } catch (err) {
+            console.error(`Wake Lock failed: ${err.message}`);
+            handleRelease();
+        }
+    }
+
+    function handleRelease() {
+        wakeLock = null;
+        btn.classList.remove('active');
+        btn.textContent = 'AWAKE'; 
+        
+        // Reset styles completely back to the default CSS stylesheet values
+        btn.style.backgroundColor = '';
+        btn.style.color = '';
+        btn.style.opacity = '';
+        btn.style.border = '';
+        
+        localStorage.setItem('pcWakeLockActive', 'false'); 
+    }
+
+    btn.addEventListener('click', async () => {
+        if (!('wakeLock' in navigator)) {
+            console.warn('Wake Lock API not supported.');
+            alert('Screen Wake Lock is not supported on this device/browser.');
+            return;
+        }
+        if (wakeLock === null) {
+            await requestWakeLock();
+        } else {
+            await wakeLock.release();
+            handleRelease();
+        }
+    });
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && localStorage.getItem('pcWakeLockActive') === 'true') {
+            await requestWakeLock();
+        }
+    });
+
+    if (localStorage.getItem('pcWakeLockActive') === 'true') {
+        setTimeout(async () => {
+            await requestWakeLock();
+        }, 100);
+    }
+}
+
+// Fire the self-contained manager
+initializeWakeLockButton();
+
+
+
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Windows Screensaver Suite</title>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
+        canvas { position: absolute; top: 0; left: 0; display: block; width: 100vw; height: 100vh; }
+        
+        /* Hidden Controller Styles (Windows 95 Theme) */
+        #retro-controller {
+            position: absolute;
+            top: 0;
+            left: -200px; /* Hidden off-screen by default */
+            width: 180px;
+            background: #cbd0d4;
+            border: 3px solid;
+            border-color: #fff #5a5a5a #5a5a5a #fff;
+            padding: 10px;
+            z-index: 9999;
+            transition: left 0.2s ease-in-out;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+        }
+        /* Hover zone to reveal the controller */
+        #hover-trigger {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 20px;
+            height: 100vh;
+            z-index: 9998;
+        }
+        #hover-trigger:hover + #retro-controller, #retro-controller:hover {
+            left: 0;
+        }
+        .panel-title {
+            background: #000080;
+            color: white;
+            padding: 2px 5px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .retro-btn {
+            display: block;
+            width: 100%;
+            background: #cbd0d4;
+            border: 2px solid;
+            border-color: #fff #5a5a5a #5a5a5a #fff;
+            padding: 6px;
+            margin: 6px 0;
+            text-align: left;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .retro-btn:active {
+            border-color: #5a5a5a #fff #fff #5a5a5a;
+            padding: 7px 5px 5px 7px;
+        }
+        .active-saver {
+            background: #dfdfdf;
+            border-color: #5a5a5a #fff #fff #5a5a5a;
+        }
+        
+        /* Windows 95 Style Control Panels */
+        .control-group {
+            margin-top: 12px;
+            border: 2px dashed #808080;
+            padding: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #000;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 4px;
+        }
+        .retro-slider {
+            width: 100%;
+            margin: 0;
+            cursor: pointer;
+        }
+        .retro-select {
+            width: 100%;
+            font-size: 11px;
+            padding: 2px;
+            background: #fff;
+            border: 2px solid;
+            border-color: #5a5a5a #fff #fff #5a5a5a;
+            font-family: monospace;
+        }
+        .live-counter {
+            margin-top: 6px;
+            font-size: 10px;
+            color: #404040;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Invisible trigger on the far left edge of the screen -->
+    <div id="hover-trigger"></div>
+
+    <!-- The slide-out Windows 95 control dashboard -->
+    <div id="retro-controller">
+        <div class="panel-title">Desktop Settings</div>
+        <button class="retro-btn active-saver" onclick="switchSaver('pipes', this)">1. 3D Pipes</button>
+        <button class="retro-btn" onclick="switchSaver('starfield', this)">2. Starfield</button>
+        <button class="retro-btn" onclick="switchSaver('mystify', this)">3. Mystify Shapes</button>
+        
+        <!-- Brightness Slider Element -->
+        <div class="control-group">
+            <label for="brightness">Brightness:</label>
+            <input type="range" id="brightness" class="retro-slider" min="0" max="100" value="50" oninput="updateBrightness(this.value)">
+        </div>
+
+        <!-- Safe Memory Protection Dropdown Framework -->
+        <div class="control-group">
+            <label for="timer-select">Memory Reset:</label>
+            <select id="timer-select" class="retro-select" onchange="changeResetInterval(this.value)">
+                <option value="30">30 Seconds</option>
+                <option value="60" selected>1 Minute</option>
+                <option value="120">2 Minutes</option>
+                <option value="300">5 Minutes</option>
+            </select>
+            <div id="countdown-display" class="live-counter">Next reset in: 60s</div>
+        </div>
+    </div>
+
+    <!-- Canvas layers for the separate engines -->
+    <canvas id="2d-canvas"></canvas>
+
+    <script>
+        // 1. Piece together the jsDelivr link for 3D Engines
+        const path1 = "https://cdn.jsdelivr.net/";
+        const path2 = "npm/three@0.128.0/";
+        const path3 = "build/three.min.js";
+        
+        const loaderScript = document.createElement('script');
+        loaderScript.src = path1 + path2 + path3;
+        loaderScript.async = false;
+        document.head.appendChild(loaderScript);
+
+        // Core variables
+        let currentSaver = 'pipes';
+        let globalBrightness = 0.5; 
+        const canvas2D = document.getElementById('2d-canvas');
+        const ctx2D = canvas2D.getContext('2d');
+        let threeScene, threeCamera, threeRenderer, ambientLight, dirLight, activePipes = [];
+        let stars = [], mystifyPolygons = [];
+        let animationFrameId;
+
+        // SAFE TIME VARIABLES: Decoupled clock counters tracking timestamps directly
+        let resetIntervalSeconds = 60; 
+        let timeRemainingSeconds = 60;
+        let lastClockTickTime = 0;
+
+        // Canvas resizing
+        function resizeAll() {
+            canvas2D.width = window.innerWidth;
+            canvas2D.height = window.innerHeight;
+            if (threeCamera && threeRenderer) {
+                threeCamera.aspect = window.innerWidth / window.innerHeight;
+                threeCamera.updateProjectionMatrix();
+                threeRenderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+        window.addEventListener('resize', resizeAll);
+        resizeAll();
+
+        // Dynamic Brightness Handler
+        function updateBrightness(val) {
+            globalBrightness = val / 100; 
+            if (ambientLight && dirLight) {
+                ambientLight.intensity = 0.33 + (globalBrightness * 0.47);
+                dirLight.intensity = 0.8 + (globalBrightness * 0.4);
+            }
+        }
+
+        // Timer Rule Manager
+        function changeResetInterval(val) {
+            resetIntervalSeconds = parseInt(val, 10);
+            resetActiveEngine();
+        }
+
+        // Safe Engine Reset Pipeline: Instantly purges cache containers safely
+        function resetActiveEngine() {
+            timeRemainingSeconds = resetIntervalSeconds;
+            
+            if (currentSaver === 'pipes') {
+                if (threeScene) {
+                    threeScene.clear(); // One-line bulletproof flush function
+                }
+                initThreePipes();
+            } else {
+                ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
+                if (currentSaver === 'starfield') initStarfield();
+                if (currentSaver === 'mystify') initMystify();
+            }
+        }
+
+        // 2. Controller Toggle Logic
+        function switchSaver(type, element) {
+            currentSaver = type;
+            
+            // Update button styles securely
+            const buttons = document.querySelectorAll('.retro-btn');
+            buttons.forEach(btn => btn.classList.remove('active-saver'));
+            if(element) element.classList.add('active-saver');
+
+            // Reset layouts
+            ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
+            if (threeRenderer) {
+                threeRenderer.domElement.style.display = (type === 'pipes') ? 'block' : 'none';
+            }
+            
+            resetActiveEngine();
+        }
+
+        // ==========================================
+        // ENGINE A: STARFIELD REMAKE
+        // ==========================================
+        function initStarfield() {
+            stars = [];
+            for(let i=0; i<300; i++) {
+                stars.push({
+                    x: Math.random() * canvas2D.width - canvas2D.width/2,
+                    y: Math.random() * canvas2D.height - canvas2D.height/2,
+                    z: Math.random() * canvas2D.width
+                });
+            }
+        }
+
+        function runStarfield() {
+            ctx2D.fillStyle = 'black';
+            ctx2D.fillRect(0, 0, canvas2D.width, canvas2D.height);
+            for(let i=0; i<stars.length; i++) {
+                let s = stars[i];
+                s.z -= 5;
+                if(s.z <= 0) {
+                    s.x = Math.random() * canvas2D.width - canvas2D.width/2;
+                    s.y = Math.random() * canvas2D.height - canvas2D.height/2;
+                    s.z = canvas2D.width;
+                }
+                let k = 128.0 / s.z;
+                let px = s.x * k + canvas2D.width/2;
+                let py = s.y * k + canvas2D.height/2;
+                if(px >= 0 && px <= canvas2D.width && py >= 0 && py <= canvas2D.height) {
+                    let size = (1 - s.z / canvas2D.width) * 5;
+                    let alphaBase = (1 - s.z / canvas2D.width) + (globalBrightness * 0.3);
+                    ctx2D.fillStyle = `rgba(255,255,255,${Math.min(1, alphaBase)})`;
+                    ctx2D.fillRect(px, py, size, size);
+                }
+            }
+        }
+
+        // ==========================================
+        // ENGINE B: MYSTIFY SHIFTING LINES
+        // ==========================================
+        function initMystify() {
+            mystifyPolygons = [];
+            const getBrightColor = () => `hsl(${Math.random() * 360}, 100%, ${50 + (globalBrightness * 15)}%)`;
+            
+            for(let p=0; p<2; p++) {
+let poly = { color: getBrightColor(), history: [], points: [] };
+for(let i=0; i<4; i++) {
+poly.points.push({
+x: Math.random() * canvas2D.width,
+y: Math.random() * canvas2D.height,
+vx: (Math.random() - 0.5) * 6,
+vy: (Math.random() - 0.5) * 6
+});
+}
+mystifyPolygons.push(poly);
+}
+}
+function runMystify() {
+ctx2D.fillStyle = 'black';
+ctx2D.fillRect(0, 0, canvas2D.width, canvas2D.height);
+mystifyPolygons.forEach(poly => {
+poly.points.forEach(pt => {
+pt.x += pt.vx; pt.y += pt.vy;
+if(pt.x < 0 || pt.x > canvas2D.width) pt.vx *= -1;
+if(pt.y < 0 || pt.y > canvas2D.height) pt.vy *= -1;
+});
+let currentFrame = poly.points.map(p => ({x: p.x, y: p.y}));
+poly.history.push(currentFrame);
+if(poly.history.length > 8) poly.history.shift();
+ctx2D.lineWidth = 1 + (globalBrightness * 2);
+poly.history.forEach((frame, idx) => {
+ctx2D.strokeStyle = poly.color;
+ctx2D.globalAlpha = (idx + 1) / poly.history.length;
+ctx2D.beginPath();
+ctx2D.moveTo(frame.x, frame.y);
+for(let i=1; i<frame.length; i++) ctx2D.lineTo(frame[i].x, frame[i].y);
+ctx2D.lineTo(frame.x, frame.y);
+ctx2D.stroke();
+});
+});
+ctx2D.globalAlpha = 1.0;
+}
+// ==========================================
+// ENGINE C: 3D PIPES (Three.js framework)
+// ==========================================
+let lastPipeTime = 0;
+function initThreePipes() {
+if (typeof THREE === 'undefined') return;
+if (!threeRenderer) {
+threeScene = new THREE.Scene();
+threeCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+threeCamera.position.set(12, 12, 20);
+threeCamera.lookAt(0, 0, 0);
+threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+threeRenderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(threeRenderer.domElement);
+} else {
+threeScene = new THREE.Scene();
+}
+ambientLight = new THREE.AmbientLight(0xffffff, 0.33 + (globalBrightness * 0.47));
+threeScene.add(ambientLight);
+dirLight = new THREE.DirectionalLight(0xffffff, 0.8 + (globalBrightness * 0.4));
+dirLight.position.set(10, 20, 10);
+threeScene.add(dirLight);
+const bounds = 8, segmentLength = 0.3, pipeRadius = 0.25;
+class WebPipe {
+constructor() { this.reset(); }
+reset() {
+const colors = [0xff3333, 0x33ff33, 0x3333ff, 0xffff33, 0xff33ff, 0x33ffff];
+this.material = new THREE.MeshStandardMaterial({
+color: colors[Math.floor(Math.random() * colors.length)],
+roughness: 0.1,
+metalness: 0.8 - (globalBrightness * 0.7)
+});
+this.currentPos = new THREE.Vector3(
+Math.floor(Math.random() * bounds) - bounds/2,
+Math.floor(Math.random() * bounds) - bounds/2,
+Math.floor(Math.random() * bounds) - bounds/2
+);
+this.direction = new THREE.Vector3(1, 0, 0);
+this.joint();
+}
+joint() {
+const sGeo = new THREE.SphereGeometry(pipeRadius * 1.2, 16, 16);
+const j = new THREE.Mesh(sGeo, this.material);
+j.position.copy(this.currentPos);
+threeScene.add(j);
+}
+grow() {
+if (Math.random() < 0.15) {
+const dirs = [
+new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
+new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
+new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)
+];
+const valid = dirs.filter(d => d.dot(this.direction) === 0);
+this.direction = valid[Math.floor(Math.random() * valid.length)];
+this.joint();
+}
+const cGeo = new THREE.CylinderGeometry(pipeRadius, pipeRadius, segmentLength, 16);
+const seg = new THREE.Mesh(cGeo, this.material);
+seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), this.direction);
+this.currentPos.add(this.direction.clone().multiplyScalar(segmentLength));
+seg.position.copy(this.currentPos).sub(this.direction.clone().multiplyScalar(segmentLength / 2));
+threeScene.add(seg);
+if (Math.abs(this.currentPos.x) > bounds ||
+Math.abs(this.currentPos.y) > bounds ||
+Math.abs(this.currentPos.z) > bounds) {
+this.reset();
+}
+}
+}
+activePipes = [];
+for (let i = 0; i < 4; i++) {
+activePipes.push(new WebPipe());
+}
+}
+// ==========================================
+// MAIN CENTRAL LOOP CONTROL
+// ==========================================
+function masterLoop(timestamp) {
+animationFrameId = requestAnimationFrame(masterLoop);
+// Safe Step Counter: Measures frame timestamps cleanly to run a real second-hand countdown clock
+
+if (currentSaver === 'pipes' && threeRenderer && typeof THREE !== 'undefined') {
+threeScene.rotation.y += 0.002;
+if (timestamp - lastPipeTime > 30) {
+activePipes.forEach(p => p.grow());
+lastPipeTime = timestamp;
+}
+threeRenderer.render(threeScene, threeCamera);
+} else if (currentSaver === 'starfield') {
+runStarfield();
+} else if (currentSaver === 'mystify') {
+runMystify();
+}
+}
+
+
+// ADD THIS SAFE ENGINE LOWER DOWN IN YOUR SCRIPT:
+let countdownInterval = setInterval(runSafeClock, 1000);
+
+function runSafeClock() {
+    timeRemainingSeconds--;
+    const display = document.getElementById('countdown-display');
+    if (display) display.innerText = `Next reset in: ${timeRemainingSeconds}s`;
+    
+    if (timeRemainingSeconds <= 0) {
+        resetActiveEngine();
+    }
+}
+
+// Update your changeResetInterval function to clear and restart cleanly:
+function changeResetInterval(val) {
+    resetIntervalSeconds = parseInt(val, 10);
+    clearInterval(countdownInterval);
+    resetActiveEngine();
+    countdownInterval = setInterval(runSafeClock, 1000);
+}
+
+// Initialize system when CDN arrives
+loaderScript.onload = function() {
+initThreePipes();
+initStarfield();
+initMystify();
+requestAnimationFrame(masterLoop);
+};
+
+
+    </script>
+</body>
+</html>

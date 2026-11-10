@@ -1,0 +1,1169 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Put this inside your <head> section -->
+<link id="prefetch-tag" rel="prefetch" href="">
+    <title>TXT, Image & Audio Base64 Viewer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: sans-serif; 
+            display: flex; 
+            height: 100vh; 
+            max-height: 100vh;
+            overflow: hidden; 
+            background: #f0f2f5; 
+            color: #333; 
+            width: 100vw;
+        }
+        
+        /* Sidebar Layout with Smooth Collapse Transition */
+        #sidebar { 
+            width: 320px; 
+            min-width: 320px;
+            background: #fff; 
+            border-right: 1px solid #ced4da; 
+            display: flex; 
+            flex-direction: column; 
+            padding: 20px; 
+            gap: 15px; 
+            height: 100%;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        #sidebar.collapsed { margin-left: -320px; }
+        h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; margin-bottom: 5px; }
+        
+        /* Inputs */
+        textarea { width: 100%; height: 50px; resize: none; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-family: monospace; font-size: 12px; outline: none; }
+        textarea:focus { border-color: #007bff; }
+        
+        /* Control Interface Buttons */
+        .btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+        .btn:hover { background: #0056b3; }
+        .btn:disabled { background: #ced4da; color: #6c757d; cursor: not-allowed; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        
+        /* Small font drop-down box */
+        .select-size { background: #fff; color: #333; border: 1px solid #ced4da; padding: 6px 8px; font-size: 12px; border-radius: 6px; cursor: pointer; outline: none; width: 85px; }
+        .select-size:hover { border-color: #007bff; }
+        
+        /* Automation Options Checkboxes */
+        .automation-panel { display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: bold; color: #495057; background: #e9ecef; padding: 6px 12px; border-radius: 6px; border: 1px solid #ced4da; }
+        .automation-item { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+        .automation-item input { cursor: pointer; width: 14px; height: 14px; }
+        
+        /* Sidebar Navigation Items */
+        #file-list-container { flex-grow: 1; overflow-y: auto; margin-top: 5px; padding-right: 5px; }
+                .file-link { 
+            display: block; 
+            padding: 4px 8px;       /* Reduced from 10px 12px */
+            margin-bottom: 3px;     /* Reduced from 6px */
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            border-radius: 4px;     /* Made corners slightly sharper */
+            text-decoration: none; 
+            color: #495057; 
+            font-size: 12px;        /* Shrunk text down slightly from 13px */
+            word-break: break-all; 
+            cursor: pointer; 
+            line-height: 1.3;       /* Tightens multi-line names */
+        }
+
+        .file-link:hover { background: #e9ecef; color: #007bff; }
+        .file-link.active { background: #007bff; color: white; border-color: #007bff; }
+        
+        /* Collapse Tab Handle */
+        #toggle-sidebar-btn { position: absolute; left: 100%; top: 20px; z-index: 9999; background: #fff; border: 1px solid #ced4da; padding: 12px 10px; border-radius: 0 6px 6px 0; cursor: pointer; box-shadow: 3px 2px 5px rgba(0,0,0,0.1); font-weight: bold; color: #495057; }
+        #toggle-sidebar-btn:hover { background: #f8f9fa; color: #007bff; }
+
+        /* Workspace Wrapper */
+        #workspace { flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 20px 20px 20px 45px; height: 100%; overflow: hidden; min-width: 0; }
+
+        /* Responsive Viewer Card */
+        #viewer-card { width: 100%; height: 100%; background: white; border-radius: 8px; border: 1px solid #ced4da; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Top Control Bar */
+        /* Dynamic Control Bar - Wraps automatically when space runs tight */
+        #viewer-header { 
+            background: #f8f9fa; 
+            border-bottom: 1px solid #ced4da; 
+            padding: 10px 15px; 
+            display: flex; 
+            flex-direction: column; /* Stacks title and controls on very tiny panels */
+            gap: 10px; 
+            flex-shrink: 0; 
+        }
+
+        /* Responsive Container for Buttons and Selectors */
+        .viewer-controls { 
+            display: flex; 
+            align-items: center; 
+            justify-content: flex-start;
+            gap: 8px; 
+            flex-wrap: wrap; /* Critical: Allows controls to drop down instead of clipping */
+            width: 100%;
+        }
+
+        /* Adjusts layout for standard sized desktop display viewports */
+        @media (min-width: 768px) {
+            #viewer-header {
+                flex-direction: row; /* Puts title and controls back side-by-side */
+                align-items: center;
+                justify-content: space-between;
+            }
+            .viewer-controls {
+                width: auto; /* Shrinks controls box to fit content exactly */
+                justify-content: flex-end;
+            }
+        }
+
+
+        /* Content Display Canvas Area */
+        #content-box { flex-grow: 1; padding: 25px; overflow: auto; background: #fff; display: flex; flex-direction: column; position: relative; }
+        
+        /* Raw Code View Setup */
+        #text-renderer { flex-grow: 1; width: 100%; height: 100%; font-family: 'Arial', 'Courier New', Courier, monospace; white-space: pre-wrap; font-size: 14px; line-height: 1.6; border: none; outline: none; display: block; }
+        
+        /* Rich Media Container Panels */
+/* Rich Media Container Panels */
+.media-container { display: none; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; height: 100%; gap: 20px; text-align: center; }
+
+.media-container img { 
+    width: 100%;
+    height: 100%;
+    max-width: 100%; 
+    max-height: 100%; /* Changed from 70vh to 100% to fill the workspace box */
+    object-fit: contain; /* Automatically snaps to the maximum possible width or height without breaking aspect ratio */
+    border-radius: 6px; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15); 
+}
+
+/* Forces the image to fill the canvas width and scale its height naturally */
+.fit-width-active {
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    object-fit: contain !important;
+}
+
+
+        .media-container audio { width: 100%; max-width: 500px; height: 54px; }
+        
+        /* Clear Mode Status Indicator Alert Banner */
+        .media-info-tag { font-size: 13px; font-weight: bold; padding: 8px 16px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tag-audio { color: #1db954; background: #e8f7ed; border: 1px solid #a3e4b8; }
+        .tag-image { color: #007bff; background: #e6f2ff; border: 1px solid #b3d7ff; }
+
+        .error { color: #dc3545; font-family: sans-serif; }
+        .loading { color: #6c757d; font-style: italic; font-family: sans-serif; }
+
+
+
+textarea.drag-hover {
+    border-color: #007bff;
+    background-color: #f0f7ff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.5);
+}
+
+
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Layout -->
+    <div id="sidebar">
+        <button id="toggle-sidebar-btn" onclick="toggleSidebar()" title="Toggle Sidebar">◀</button>
+        <div>
+            <h3>1. Paste TXT Links Here</h3>
+            <!-- New File Upload Field -->
+            <input type="file" id="file-uploader" accept=".txt" onchange="loadLinksFromFile(this)" style="width: 100%; margin: 5px 0 5px 0; font-size: 12px; cursor: pointer;">
+            
+            <textarea id="bulk-inputs" 
+          placeholder="Paste URL/s or drop txt file here:&#10;https://example.com"
+          ondragover="handleDragOver(event)" 
+          ondragleave="handleDragLeave(event)" 
+          ondrop="handleDrop(event)"></textarea>
+
+            <button class="btn" onclick="generateFileList()" style="width: 100%; margin-top: 5px;">Load Files</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;">
+            <h3>2. Select a File</h3>
+            <div id="file-list-container"></div>
+        </div>
+    </div>
+
+    <!-- Main Workspace Frame -->
+    <div id="workspace">
+        <div id="viewer-card">
+            <!-- Header Controls Bar -->
+            <div id="viewer-header">
+<h2 id="current-title" style="font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">No file selected</h2>
+                <div class="viewer-controls">
+                    
+                    <!-- Font Size Dropper Widget Box -->
+                    <select class="select-size" id="font-size-select" onchange="changeFontSize(this.value)" title="Font Size">
+                        <option value="12px">12px</option>
+                        <option value="14px" selected>14px</option>
+                        <option value="16px">16px</option>
+                        <option value="18px">18px</option>
+                        <option value="20px">20px</option>
+                    </select>
+
+<!-- Checkboxes Dashboard Suite -->
+<div class="automation-panel">
+    <label class="automation-item">
+        <input type="checkbox" id="chk-autoplay"> Autoplay
+    </label>
+    <label class="automation-item">
+        <input type="checkbox" id="chk-shuf"> Shuffle
+    </label>
+    <label class="automation-item">
+        <input type="checkbox" id="chk-autonext" checked> Auto-Next
+    </label>
+    <!-- Simple checkbox addition styled to stand out nicely -->
+    <label class="automation-item" style="color: #007bff; border-left: 1px solid #ced4da; padding-left: 8px; margin-left: 4px;">
+        <input type="checkbox" id="chk-fit-width"> ↔ Fit Width
+    </label>
+</div>
+
+
+                    <button class="btn btn-secondary" id="prev-btn" onclick="navigateFile(-1)" disabled>◀ Prev</button>
+                    <!-- Replace your old copy-btn line with this: -->
+<button class="btn" id="copy-btn" onclick="downloadActiveFile()" disabled>💾 Download</button>
+                    <button class="btn btn-secondary" id="next-btn" onclick="navigateFile(1)" disabled>Next ▶</button>
+                </div>
+            </div>
+            
+            <!-- Viewer Canvas Layout Box -->
+            <div id="content-box">
+                <!-- Text Renderer Panel -->
+                <div id="text-renderer">Select a file from the sidebar to view its content.</div>
+                
+                <!-- Graphic Image Box Layer -->
+                <div id="image-container" class="media-container">
+                    <div class="media-info-tag tag-image">📸 Image Mode Active</div>
+                    <img id="img-element" src="" alt="Content Preview">
+                </div>
+
+                <!-- Interactive Audio Deck Player Box Layer -->
+                <div id="audio-container" class="media-container">
+                    <div class="media-info-tag tag-audio">🎵 Audio Player Engine Ready</div>
+                    <audio id="audio-element" controls></audio>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let loadedUrls = [];
+        let currentIndex = -1;
+        let playedIndicesHistory = []; 
+let fileCache = {}; 
+
+
+
+// =========================================================================
+// 📋 ALL-IN-ONE EMBEDDED PRE-LOAD LIST
+//    Paste your multiline list of absolute URLs here. It works on page load!
+//    To bypass or run clean, simply delete the entries leaving the backticks empty.
+// =========================================================================
+const MY_EMBEDDED_TEXT_LIST = `
+
+`;
+// =========================================================================
+
+
+window.onload = function() {
+    // 1. Instantly trigger your embedded text list parsing engine on page startup
+    loadPrecompiledList();
+    
+    // 2. Check if element exists before reading its font values
+    const fontSelect = document.getElementById('font-size-select');
+    if (fontSelect) {
+        changeFontSize(fontSelect.value);
+    }
+    
+    // 3. Resets image scroll layouts precisely when a new file finishes loading
+    const imgEl = document.getElementById('img-element');
+    const imgBox = document.getElementById('image-container');
+    if (imgEl && imgBox) {
+        imgEl.addEventListener('load', function() {
+            imgBox.scrollTop = 0;
+        });
+    }
+    
+    // 4. Connect track completion triggers to the native HTML5 audio deck
+    const audioPlayer = document.getElementById('audio-element');
+    if (audioPlayer) {
+        audioPlayer.addEventListener('ended', handleAudioTrackEnded);
+    }
+};
+
+
+function loadPrecompiledList() {
+    if (!MY_EMBEDDED_TEXT_LIST || !MY_EMBEDDED_TEXT_LIST.trim()) {
+        console.log("[Preloader Engine] Embedded text block is empty. Skipping auto-load.");
+        return;
+    }
+
+    const container = document.getElementById('file-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Split text cleanly by lines, cleaning out tabs and white space margins
+    loadedUrls = MY_EMBEDDED_TEXT_LIST.split('\n')
+        .map(line => line.replace(/\t/g, ' ').trim())
+        .filter(line => line.length > 0);
+
+    if (loadedUrls.length === 0) return;
+
+    console.log(`[Preloader Engine] Instantly loading ${loadedUrls.length} preloaded assets into sidebar...`);
+    renderSidebarLinks();
+}
+
+
+function generateFileList() {
+    const textarea = document.getElementById('bulk-inputs');
+    const container = document.getElementById('file-list-container');
+    container.innerHTML = '';
+    
+    const rawInput = textarea.value;
+    loadedUrls = [];
+
+    if (!rawInput.trim()) {
+        container.innerHTML = 'No URLs added yet.';
+        currentIndex = -1;
+        updateControlButtons();
+        return;
+    }
+
+    const lines = rawInput.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+
+    // --- STRATEGY DETECTOR PIPELINE ---
+    let isPrecompiledUrlList = true;
+    for (let line of lines) {
+        if (line.toLowerCase().includes('jsdelivr.com') || (!line.startsWith('http') && !line.startsWith('data:'))) {
+            isPrecompiledUrlList = false;
+            break;
+        }
+    }
+
+    if (isPrecompiledUrlList) {
+        // === MODE 1: NATIVE OLD CODE BEHAVIOUR (Pre-made URLs List) ===
+        console.log("[Parser Engine] Running in Backwards-Compatible Mode (Clean URL List detected)");
+        loadedUrls = lines;
+    } else {
+        // === MODE 2: SELF-SENSING CDN EXTRACTOR ENGINE (Raw Web Text Dumps) ===
+        console.log("[Parser Engine] Running in Extractor Mode (Messy Web Text Dump detected)");
+        
+        const targetCdnDomain = "https://cdn.jsdelivr.net/gh/";
+        let isolatedUserRepo = "";   
+        let isolatedBranch = "main"; 
+
+        // Pass A: Extract repo user, repo name and branch modifiers cleanly
+        for (let i = 0; i < lines.length; i++) {
+            let cleanLine = lines[i];
+
+            if (cleanLine.toLowerCase().includes('jsdelivr.com')) {
+                let marker = 'gh/';
+                let markerPos = cleanLine.toLowerCase().indexOf(marker);
+                
+                if (markerPos === -1 && cleanLine.toLowerCase().includes('/package/')) {
+                    marker = '/package/gh/';
+                    markerPos = cleanLine.toLowerCase().indexOf(marker);
+                }
+
+                if (markerPos !== -1) {
+                    let remainingText = cleanLine.substring(markerPos + marker.length).trim();
+                    let boundaries = [' ', '"', "'", '?', '#'];
+                    for (let boundary of boundaries) {
+                        let idx = remainingText.indexOf(boundary);
+                        if (idx !== -1) remainingText = remainingText.substring(0, idx);
+                    }
+
+                    if (remainingText.endsWith('/')) {
+                        remainingText = remainingText.substring(0, remainingText.length - 1);
+                    }
+                    
+                    let pathSegments = remainingText.split('/');
+                    if (pathSegments.length >= 2) {
+                        isolatedUserRepo = pathSegments[0] + '/' + pathSegments[1];
+                    }
+                }
+            }
+
+            if (cleanLine.includes('@') && !cleanLine.toLowerCase().includes('http')) {
+                let segments = cleanLine.split('@');
+                if (segments.length >= 2) {
+                    let candidateBranch = segments[1].trim();
+                    let spaceIdx = candidateBranch.indexOf(' ');
+                    if (spaceIdx !== -1) {
+                        candidateBranch = candidateBranch.substring(0, spaceIdx);
+                    }
+                    isolatedBranch = candidateBranch;
+                }
+            }
+        }
+
+        // Pass B: Loop through and stitch naked filename entries using tab separation rules
+        if (isolatedUserRepo) {
+            lines.forEach(line => {
+                let normalizedLower = line.toLowerCase();
+                if (
+                    normalizedLower.startsWith('http') || 
+                    line.startsWith('©') || 
+                    line.includes('@') ||
+                    normalizedLower.includes('cdn files') ||
+                    normalizedLower.includes('hits badge') ||
+                    normalizedLower.includes('toggle navigation') ||
+                    normalizedLower.startsWith('- ') ||
+                    normalizedLower.includes('looking for a nice landing page') ||
+                    normalizedLower.includes('documentation') ||
+                    normalizedLower.includes('learn more about')
+                ) {
+                    return;
+                }
+
+                // Isolate file using literal tab characters (\t) to keep full file name spaces intact
+                let lineTokens = line.split('\t');
+                let filename = lineTokens[0] ? lineTokens[0].trim() : "";
+
+                let lowerFile = filename.toLowerCase();
+                if (lowerFile === 'readme.md' || filename === '.' || filename === '..' || !filename) {
+                    return;
+                }
+
+                let completeCdnUrl = targetCdnDomain + isolatedUserRepo + "@" + isolatedBranch + "/" + filename;
+                loadedUrls.push(completeCdnUrl);
+            });
+        }
+    }
+
+    // Instantly remove matching duplicate entries
+    loadedUrls = [...new Set(loadedUrls)];
+
+    if (loadedUrls.length === 0) {
+        container.innerHTML = 'No URLs or valid file paths parsed yet.';
+        currentIndex = -1;
+        updateControlButtons();
+        return;
+    }
+
+    renderSidebarLinks();
+}
+
+
+// FIXED: Streamlined, unified renderer completely free of array vs string .substring() crashes
+function renderSidebarLinks() {
+    const container = document.getElementById('file-list-container');
+    container.innerHTML = '';
+
+    loadedUrls.forEach((url, index) => {
+        let displayTitle = "";
+        
+        if (url.startsWith('data:')) {
+            displayTitle = `Data Stream #${index + 1}`;
+        } else if (url.startsWith('http://') || url.startsWith('https://')) {
+            // Safely isolate the string first, dropping tracking queries cleanly
+            let cleanStringUrl = url.split('?')[0];
+            let lastSlash = cleanStringUrl.lastIndexOf('/');
+            
+            displayTitle = lastSlash !== -1 
+                ? decodeURIComponent(cleanStringUrl.substring(lastSlash + 1)) 
+                : `File #${index + 1}`;
+        } else {
+            displayTitle = url.length > 25 ? url.substring(0, 22) + "..." : url;
+        }
+
+        const link = document.createElement('a');
+        link.className = 'file-link';
+        link.id = `file-link-${index}`;
+        link.innerText = displayTitle;
+        link.title = url; 
+        link.onclick = function() { selectFile(index); };
+        container.appendChild(link);
+    });
+
+    currentIndex = -1;
+    if (typeof updateControlButtons === 'function') {
+        updateControlButtons();
+    }
+}
+
+
+
+
+
+
+
+function selectFile(index) {
+    if (index < 0 || index >= loadedUrls.length) return;
+    currentIndex = index;
+    const url = loadedUrls[currentIndex];
+    let fileName = url.substring(url.lastIndexOf('/') + 1) || url;
+    document.querySelectorAll('.file-link').forEach(el => el.classList.remove('active'));
+    const activeLink = document.getElementById(`file-link-${currentIndex}`);
+    if (activeLink) {
+        activeLink.classList.add('active');
+        activeLink.scrollIntoView({ block: 'nearest' });
+    }
+    fetchFileContent(url, fileName);
+}
+
+
+// === SELF-HEALING RECOVERY CONFIGURATION ===
+let prefetchRetryCount = 0;
+const MAX_PREFETCH_RETRIES = 3;
+const RETRY_DELAY_MS = 3000; // 3 seconds spacing
+
+function prefetchNextFile() {
+    const isShuffleActive = document.getElementById('chk-shuf')?.checked;
+
+    // Stop if shuffle is on, list is empty, or we are at the end
+    if (isShuffleActive || loadedUrls.length <= 1 || currentIndex === -1) {
+        return;
+    }
+
+    const nextIndex = currentIndex + 1;
+
+    if (nextIndex < loadedUrls.length) {
+        const nextUrl = loadedUrls[nextIndex];
+
+        // Skip downloading if we already have it cached cleanly
+        if (fileCache[nextUrl]) {
+            prefetchRetryCount = 0; // Reset counter since this file is good
+            return;
+        }
+
+        // Apply cache-buster timestamp to force jsDelivr to evaluate clean CORS headers
+        const cacheBusterUrl = nextUrl.includes('?') 
+            ? `${nextUrl}&_cb=${Date.now()}` 
+            : `${nextUrl}?_cb=${Date.now()}`;
+
+        console.log(`[Prefetch Engine] Attempting to fetch: ${nextUrl.substring(nextUrl.lastIndexOf('/') + 1)} (Attempt ${prefetchRetryCount + 1})`);
+
+        fetch(cacheBusterUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                return response.text();
+            })
+            .then(rawText => {
+                // Double check it's not a generic jsDelivr HTML error page masked as text
+                if (rawText.includes('<!DOCTYPE html>') || rawText.includes('<html')) {
+                    throw new Error("CDN returned an HTML error page instead of raw data.");
+                }
+
+                fileCache[nextUrl] = rawText.trim(); // Store cleanly in memory
+                console.log("[Prefetch Success] Cached: " + nextUrl.substring(nextUrl.lastIndexOf('/') + 1));
+                
+                prefetchRetryCount = 0; // Reset counter for the next files down the line
+            })
+            .catch((error) => {
+                console.warn(`[Prefetch CORS/Network Block] Encountered an error for: ${nextUrl.substring(nextUrl.lastIndexOf('/') + 1)}`, error);
+
+                if (prefetchRetryCount < MAX_PREFETCH_RETRIES) {
+                    prefetchRetryCount++;
+                    console.log(`[Prefetch Recovery] CORS block or Sync Delay detected. Retrying file in ${RETRY_DELAY_MS / 1000} seconds...`);
+                    
+                    // Call itself again after a delay to wake up the engine
+                    setTimeout(() => {
+                        prefetchNextFile();
+                    }, RETRY_DELAY_MS);
+                } else {
+                    console.error(`[Prefetch Aborted] Failed after ${MAX_PREFETCH_RETRIES} attempts. Skipping prefetch for this file to save resources.`);
+                    prefetchRetryCount = 0; // Reset counter so the next file change can trigger a fresh cycle
+                }
+            });
+    }
+}
+
+
+function fetchFileContent(url, fileName) {
+    const titleEl = document.getElementById('current-title');
+    const txtView = document.getElementById('text-renderer');
+    const imgBox = document.getElementById('image-container');
+    const audioBox = document.getElementById('audio-container');
+    const audioPlayer = document.getElementById('audio-element');
+    
+    audioPlayer.pause();
+    audioPlayer.src = "";
+    imgBox.style.display = "none";
+    audioBox.style.display = "none";
+    txtView.style.display = "block";
+    titleEl.innerText = fileName;
+    
+    updateControlButtons();
+
+    // ⚡ THE CACHE CHECK: If the prefetch engine already downloaded it, use it instantly!
+    if (window.fileCache && fileCache[url]) {
+        console.log(`[Cache Hit] Serving "${fileName}" instantly from memory cache. 0ms delay.`);
+        processFileContents(fileCache[url]);
+        return; // Stop right here! Do not trigger a network fetch.
+    }
+
+    // 🌐 Fallback: If it's not cached yet, display loading text and run a live download
+    txtView.innerHTML = 'Loading file data...';
+    
+    fetch(url).then(response => {
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        return response.text();
+    }).then(rawText => {
+        processFileContents(rawText.trim());
+    }).catch(error => {
+        txtView.innerHTML = '<span class="error"> <strong>Failed to load file.</strong><br><br> Possible issues:<br> 1. The URL is broken or typed wrong.<br> 2. <strong>CORS block:</strong> The server hosting your files might be blocking outside websites from reading them. </span>';
+        console.error(error);
+    });
+}
+
+
+function processFileContents(cleanText) {
+    const txtView = document.getElementById('text-renderer');
+    const imgBox = document.getElementById('image-container');
+    const imgEl = document.getElementById('img-element');
+    const audioBox = document.getElementById('audio-container');
+    const audioPlayer = document.getElementById('audio-element');
+    let processedSrc = cleanText;
+    let isImage = /^data:image\/(png|jpeg|jpg|webp|gif|svg\+xml);base64,/.test(cleanText);
+    let isAudio = /^data:audio\/(mp3|wav|ogg|mpeg|webm|x-wav|aac);base64,/.test(cleanText);
+    if (!isImage && !isAudio) {
+        const startingChars = cleanText.substring(0, 12);
+        if (startingChars.startsWith("SUQz") || startingChars.startsWith("//M0") || startingChars.startsWith("//MY")) {
+            processedSrc = "data:audio/mp3;base64," + cleanText;
+            isAudio = true;
+        } else if (startingChars.startsWith("UklGR")) {
+            processedSrc = "data:audio/wav;base64," + cleanText;
+            isAudio = true;
+        } else if (startingChars.startsWith("iVBORw0KGgo")) {
+            processedSrc = "data:image/png;base64," + cleanText;
+            isImage = true;
+        } else if (startingChars.startsWith("/9j/")) {
+            processedSrc = "data:image/jpeg;base64," + cleanText;
+            isImage = true;
+        } else if (startingChars.startsWith("R0lGOD")) {
+            processedSrc = "data:image/gif;base64," + cleanText;
+            isImage = true;
+        } else if (startingChars.startsWith("UklGR") && cleanText.includes("WEBP")) {
+            processedSrc = "data:image/webp;base64," + cleanText;
+            isImage = true;
+        }
+    }
+    if (isImage) {
+        txtView.style.display = "none";
+        imgBox.style.display = "flex";
+        imgEl.src = processedSrc;
+        txtView.textContent = cleanText;
+    } else if (isAudio) {
+        txtView.style.display = "none";
+        audioBox.style.display = "flex";
+        audioPlayer.src = processedSrc;
+        txtView.textContent = cleanText;
+        if (document.getElementById('chk-autoplay').checked) {
+            audioPlayer.play().catch(e => console.log("Playback interaction flag block logged."));
+        }
+    } else {
+        txtView.textContent = cleanText;
+    }
+    updateControlButtons();
+    prefetchNextFile(); 
+}
+
+function handleAudioTrackEnded() {
+    if (document.getElementById('chk-autonext').checked) {
+        if (document.getElementById('chk-shuf').checked) {
+            executeShuffleStep();
+        } else {
+            navigateFile(1);
+        }
+    }
+}
+
+function executeShuffleStep() {
+    if (loadedUrls.length <= 1) return;
+    if (playedIndicesHistory.length >= loadedUrls.length) {
+        playedIndicesHistory = [];
+    }
+    if (!playedIndicesHistory.includes(currentIndex)) {
+        playedIndicesHistory.push(currentIndex);
+    }
+    let randomIndex;
+    let attempts = 0;
+    do {
+        randomIndex = Math.floor(Math.random() * loadedUrls.length);
+        attempts++;
+    } while (playedIndicesHistory.includes(randomIndex) && attempts < 100);
+    selectFile(randomIndex);
+}
+
+function navigateFile(direction) {
+    if (document.getElementById('chk-shuf').checked && direction === 1) {
+        executeShuffleStep();
+        return;
+    }
+    const targetIndex = currentIndex + direction;
+    if (targetIndex >= 0 && targetIndex < loadedUrls.length) {
+        selectFile(targetIndex);
+    }
+}
+
+function downloadActiveFile() {
+    const txtView = document.getElementById('text-renderer');
+    const copyBtn = document.getElementById('copy-btn'); // Kept ID to keep updateControlButtons working
+    
+    if (currentIndex === -1 || txtView.querySelector('.loading') || txtView.querySelector('.error')) return;
+
+    // Grab the exact file name from your header title element
+    const currentName = document.getElementById('current-title').innerText;
+    
+    // Grab the text contents exactly as they were loaded
+    const rawData = txtView.textContent;
+    
+    // Create a plain text blob container for the file string data
+    const blob = new Blob([rawData], { type: 'text/plain;charset=utf-8' });
+    
+    // Direct, native browser file download execution pipeline
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.href = downloadUrl;
+    downloadAnchor.download = currentName; // Automatically saves with your exact file name + extension
+    
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    
+    // Memory cleanup
+    document.body.removeChild(downloadAnchor);
+    URL.revokeObjectURL(downloadUrl);
+
+    // Visual button success feedback state 
+    const originalText = copyBtn.innerText;
+    copyBtn.innerText = "✓ Downloaded!";
+    copyBtn.style.background = "#28a745";
+    setTimeout(() => {
+        copyBtn.innerText = originalText;
+        copyBtn.style.background = "";
+    }, 1500);
+}
+
+
+// Helper utility engine to safely convert base64 bitstreams directly into operational asset Blobs
+function base64ToBlob(base64, contentType) {
+    const byteCharacters = atob(base64);
+    const byteArrays = [];
+    
+    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+    }
+    return new Blob(byteArrays, { type: contentType });
+}
+
+
+function changeFontSize(size) {
+    document.getElementById('text-renderer').style.fontSize = size;
+}
+
+// Button interface state synchronization
+function updateControlButtons() {
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const txtView = document.getElementById('text-renderer');
+    prevBtn.disabled = (currentIndex <= 0);
+    nextBtn.disabled = (currentIndex === -1 || currentIndex >= loadedUrls.length - 1);
+    const hasValidContent = currentIndex !== -1 && !txtView.querySelector('.loading') && !txtView.querySelector('.error') && txtView.innerText.trim() !== "Select a file from the sidebar to view its content.";
+    copyBtn.disabled = !hasValidContent;
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggle-sidebar-btn');
+    sidebar.classList.toggle('collapsed');
+    toggleBtn.innerText = sidebar.classList.contains('collapsed') ? "▶" : "◀";
+}
+
+
+
+        // Reads a local .txt file list and populates the textbox automatically
+        function loadLinksFromFile(inputElement) {
+            const file = inputElement.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const textContent = e.target.result;
+                // Inject the text file contents into the text area box
+                document.getElementById('bulk-inputs').value = textContent;
+                // Automatically render the file sidebar list links
+                generateFileList();
+            };
+            
+            reader.onerror = function() {
+                alert("Failed to read local file list. Please check the file format.");
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Prevents browser from opening the file and highlights the box
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.getElementById('bulk-inputs').classList.add('drag-hover');
+        }
+
+        // Removes highlight when file leaves the box area
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.getElementById('bulk-inputs').classList.remove('drag-hover');
+        }
+
+        // Catches the dropped file, reads it, and loads the list
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const textarea = document.getElementById('bulk-inputs');
+            textarea.classList.remove('drag-hover');
+
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length > 0) {
+                const file = files[0];
+                
+                // Simple validation to ensure it's a text file
+                if (file.name.endsWith('.txt') || file.type === "text/plain") {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        textarea.value = event.target.result;
+                        generateFileList(); // Automatically load the sidebar links
+                    };
+                    reader.readAsText(file);
+                } else {
+                    alert("Please only drop raw text (.txt) files here.");
+                }
+            }
+        }
+
+
+// --- Keyboard Navigation & Media Controls ---
+window.addEventListener('keydown', function(event) {
+    if (document.activeElement === document.getElementById('bulk-inputs')) {
+        return; 
+    }
+
+    const contentBox = document.getElementById('content-box');
+
+switch (event.key) {
+    case 'ArrowLeft':
+        event.preventDefault();
+        navigateFile(-1);
+        break;
+        
+    case 'ArrowRight':
+        event.preventDefault();
+        navigateFile(+1);
+        break;
+        
+    case ' ':
+        event.preventDefault();
+        const audioPlayer = document.getElementById('audio-element');
+        const audioBox = document.getElementById('audio-container');
+        if (audioBox.style.display === "flex") {
+            if (audioPlayer.paused) {
+                audioPlayer.play().catch(e => console.log("Playback blocked."));
+            } else {
+                audioPlayer.pause();
+            }
+        }
+        break;
+        
+    case 'ArrowUp':
+        event.preventDefault();
+        // FIX: Scroll the active image box if it is visible, otherwise fallback to content box
+        const imgBox = document.getElementById('image-container');
+        if (imgBox && imgBox.style.display === "flex") {
+            imgBox.scrollTop -= 40;
+        } else {
+            contentBox.scrollTop -= 40;
+        }
+        break;
+        
+    case 'ArrowDown':
+        event.preventDefault();
+        // FIX: Scroll the active image box if it is visible, otherwise fallback to content box
+        const imgBoxDown = document.getElementById('image-container');
+        if (imgBoxDown && imgBoxDown.style.display === "flex") {
+            imgBoxDown.scrollTop += 40;
+        } else {
+            contentBox.scrollTop += 40;
+        }
+        break;
+        
+    default:
+        return;
+}
+});
+
+
+// Updated Notepad Module with Multi-Media Focus Restoration Fix & Both Mouse Buttons Click Hook
+function initEscapeNotepad() {
+    const style = document.createElement('style');
+    style.textContent = `
+        #workspace-notepad { 
+            position: fixed; 
+            top: -100%; 
+            left: 0; 
+            width: 100vw; 
+            height: 100vh; 
+            background: #ffffff; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
+            transition: top 0.3s ease-in-out; 
+            display: flex; 
+            flex-direction: column; 
+            z-index: 10000; 
+        } 
+        #workspace-notepad.visible { 
+            top: 0; 
+        } 
+        .notepad-menu-bar { 
+            background: #f0f0f0; 
+            padding: 6px 12px; 
+            font-size: 13px; 
+            font-family: sans-serif; 
+            border-bottom: 1px solid #ccc; 
+            color: #333; 
+            user-select: none; 
+        } 
+        .notepad-text-input { 
+            width: 100%; 
+            height: 100%; 
+            border: none; 
+            padding: 15px; 
+            font-family: "Courier New", Courier, monospace; 
+            font-size: 16px; 
+            resize: none; 
+            box-sizing: border-box; 
+            outline: none; 
+            background: #ffffff; 
+            color: #000000; 
+        }
+    `;
+    document.head.appendChild(style);
+
+    const workspaceNotepad = document.createElement('div');
+    workspaceNotepad.id = 'workspace-notepad';
+    workspaceNotepad.innerHTML = `
+        <div class="notepad-menu-bar">Notepad (Press Esc/Insert/Left+Right Click to exit)</div>
+        <textarea class="notepad-text-input" placeholder="Start typing..."></textarea>
+    `;
+    document.body.appendChild(workspaceNotepad);
+
+    const textarea = workspaceNotepad.querySelector('.notepad-text-input');
+
+    // Centralised toggle logic used by Keys and Mouse interactions
+    function toggleNotepad() {
+        workspaceNotepad.classList.toggle('visible');
+        
+        if (workspaceNotepad.classList.contains('visible')) {
+            // Notepad opened: wait for slide transition, then focus text area
+            setTimeout(() => {
+                textarea.focus();
+            }, 300);
+        } else {
+            // Notepad closed: remove focus from text input area
+            textarea.blur();
+            
+            // Smart Focus Fallback Chain: Check what is active/visible on screen
+            const imgBox = document.getElementById('image-container');
+            const audioBox = document.getElementById('audio-container');
+            const textBox = document.getElementById('text-renderer');
+
+            if (imgBox && (imgBox.style.display === "flex" || imgBox.style.display === "block")) {
+                imgBox.focus();
+            } else if (audioBox && (audioBox.style.display === "flex" || audioBox.style.display === "block")) {
+                audioBox.focus();
+            } else if (textBox) {
+                // Ensures the text panel or global layout accepts keyboard input
+                textBox.focus();
+            }
+
+            // Ultimate fallback: refocus main body to keep global hotkeys alive
+            document.body.focus();
+        }
+    }
+
+    // Track active mouse button masks (1 = Left, 2 = Right)
+    // Checking event.buttons detects if both are pressed simultaneously
+    document.addEventListener('mousedown', function(event) {
+        if ((event.buttons & 1) && (event.buttons & 2)) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleNotepad();
+        }
+    }, true);
+
+    // Suppress context menu popup when right-clicking while left-clicking
+    document.addEventListener('contextmenu', function(event) {
+        if (workspaceNotepad.classList.contains('visible')) {
+            event.preventDefault();
+        }
+    }, true);
+
+    // Global Key Listener using true capturing to intercept keys reliably
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' || event.keyCode === 27 || event.key === 'Insert' || event.keyCode === 45) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleNotepad();
+        }
+    }, true); 
+}
+
+// Run the function to activate it on this page
+initEscapeNotepad();
+
+
+// --- Contextual Dynamic Image Viewer Control Engine ---
+(function() {
+    let currentScale = 1;
+    const imgEl = document.getElementById('img-element');
+    const imgBox = document.getElementById('image-container');
+    const chkFitWidth = document.getElementById('chk-fit-width');
+
+    if (imgEl && imgBox) {
+        imgEl.style.transition = 'transform 0.1s ease-out, transform-origin 0.05s ease-out';
+        imgEl.style.transformOrigin = 'center center';
+
+        // 1. Mouse Wheel Zoom Mechanism
+        imgBox.addEventListener('wheel', function(event) {
+            if (imgBox.style.display !== "flex") return;
+            
+            // ABORT scroll wheel zoom if "Fit Width" is active
+            if (chkFitWidth && chkFitWidth.checked) return;
+            
+            event.preventDefault(); // Stop the workspace canvas container from scrolling
+            
+            const rect = imgBox.getBoundingClientRect();
+            const mouseX = ((event.clientX - rect.left) / rect.width) * 100;
+            const mouseY = ((event.clientY - rect.top) / rect.height) * 100;
+            
+            imgEl.style.transformOrigin = `${mouseX}% ${mouseY}%`;
+
+            const zoomIntensity = 0.15;
+            if (event.deltaY < 0) {
+                currentScale += zoomIntensity;
+            } else {
+                currentScale -= zoomIntensity;
+            }
+
+            currentScale = Math.max(1, Math.min(6, currentScale));
+            imgEl.style.transform = `scale(${currentScale})`;
+        }, { passive: false });
+
+        // 2. Click Interaction Handler (Only resets manual zoom now)
+        imgEl.addEventListener('click', function() {
+            // If in fit width mode, clicks don't alter layout anymore since it stays locked
+            if (chkFitWidth && chkFitWidth.checked) return;
+
+            // Traditional mode: clicking resets scroll magnification instantly
+            currentScale = 1;
+            imgEl.style.transformOrigin = 'center center';
+            imgEl.style.transform = 'scale(1)';
+        });
+        
+        // 3. Automated State Change Handler (Instantly applies fit-width when checked)
+        if (chkFitWidth) {
+            chkFitWidth.addEventListener('change', updateImageDisplayMode);
+        }
+
+function updateImageDisplayMode() {
+    currentScale = 1; 
+    imgEl.style.transform = 'scale(1)';
+    imgEl.style.transformOrigin = 'center center';
+    
+    // FIX: Force the image container back to the top when mode changes
+    imgBox.scrollTop = 0; 
+
+    if (chkFitWidth && chkFitWidth.checked) {
+        imgEl.classList.add('fit-width-active');
+        imgBox.style.overflow = 'auto'; 
+        imgBox.style.justifyContent = 'flex-start';
+    } else {
+        imgEl.classList.remove('fit-width-active');
+        imgBox.style.overflow = 'hidden';
+        imgBox.style.justifyContent = 'center';
+    }
+}
+
+
+
+        // Automatically ensures the image maintains the preferred view state when loading a new file link
+const originalSelectFile = window.selectFile;
+if (typeof originalSelectFile === 'function') {
+    window.selectFile = function(index) {
+        originalSelectFile(index);
+        updateImageDisplayMode(); // Run this instantly without a 50ms delay
+    };
+}
+
+
+    }
+})();
+
+window.addEventListener('mousedown', (event) => {
+  // If the user is typing inside bulk inputs, ignore mouse shortcuts completely
+  if (document.activeElement === document.getElementById('bulk-inputs')) {
+    return;
+  }
+
+  const button = event.button; // 0 = Left, 2 = Right
+
+  // Only track standard Left (0) and Right (2) clicks
+  if (button !== 0 && button !== 2) return;
+
+  // ONLY INTERCEPT ON A VALID DOUBLE CLICK
+  if (event.detail === 2) {
+    event.preventDefault();
+    
+    if (button === 0) {
+      // Double Left Click -> Previous File
+      navigateFile(-1);
+      console.log('Double Left-click: Navigated to previous file.');
+    } else {
+      // Double Right Click -> Next File
+      navigateFile(+1);
+      console.log('Double Right-click: Navigated to next file.');
+    }
+  }
+});
+
+// Suppress the default right-click context menu so it doesn't break navigation
+window.addEventListener('contextmenu', (event) => {
+  // Ignore suppression if user is working inside bulk inputs
+  if (document.activeElement === document.getElementById('bulk-inputs')) return;
+  event.preventDefault();
+});
+
+
+
+
+
+    </script>
+</body>
+</html>

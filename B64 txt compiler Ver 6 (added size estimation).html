@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Base64 Payload Binder & Extractor</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #121212; color: #e0e0e0; text-align: center; }
+        .card { background: #1e1e1e; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #333; margin-bottom: 30px; }
+        .drop-zone { border: 2px dashed #007bff; padding: 30px; border-radius: 6px; background: #1a2536; cursor: pointer; margin-bottom: 20px; transition: 0.2s; }
+        .drop-zone.dragover { background: #007bff22; border-color: #28a745; }
+        .drop-zone.dat-zone { border-color: #28a745; background: #16291b; }
+        .drop-zone.dat-zone.dragover { background: #28a74522; border-color: #007bff; }
+        input, button { width: 100%; padding: 10px; margin: 8px 0; border-radius: 4px; border: 1px solid #444; background: #2d2d2d; color: #fff; box-sizing: border-box; font-size: 14px; }
+        button { background: #007bff; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
+        button:hover { background: #0056b3; }
+        button.download-btn { background: #28a745; padding: 4px 8px; font-size: 12px; width: auto; margin: 0; display: inline-block; float: right; }
+        button.download-btn:hover { background: #218838; }
+        #status, #extractStatus { font-family: monospace; font-size: 12px; color: #007bff; margin: 10px 0; min-height: 16px; }
+        #extractStatus { color: #28a745; }
+        ul { text-align: left; max-height: 150px; overflow-y: auto; background: #151515; padding: 10px 25px; border-radius: 4px; border: 1px solid #222; font-size: 13px; font-family: monospace; list-style-type: none; }
+        ul li { margin-bottom: 6px; line-height: 24px; clear: both; }
+    </style>
+</head>
+<body>
+
+<!-- 📦 COMPILER CARD (ORIGINAL) -->
+<div class="card">
+    <h3>📦 Bulk Base64 Payload Binder</h3>
+    <p style="font-size:12px; color:#aaa; margin-top:-5px;">Drop your raw Base64 .txt audio files to compile an offline-capable data pack.</p>
+    
+    <div class="drop-zone" id="dropZone">
+        <span id="dropText">Drag & Drop Base64 .txt Files Here</span>
+        <input type="file" id="fileInput" accept=".txt" multiple style="display:none;">
+    </div>
+
+    <div id="status">Ready...</div>
+    <ul id="fileList" style="display:none;"></ul>
+
+    <!-- 📊 LIVE METRICS DASHBOARD -->
+    <div id="metricsPanel" style="display: none; background: #151515; border: 1px solid #222; border-radius: 4px; padding: 10px 15px; margin: 12px 0; text-align: left; font-family: monospace; font-size: 12px;">
+        <div style="color: #666; font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid #222; padding-bottom: 4px;">📈 PRE-COMPILATION METRICS:</div>
+        <div>📦 Pack Mode: <span id="metricMode" style="color: #007bff;">Plaintext (.dat Archive)</span></div>
+        <div>⚖️ Est. Payload Size: <span id="metricSize" style="color: #28a745;">0.00 KB</span></div>
+    </div>
+
+    <input type="password" id="passKey" placeholder="Optional: Set Unlock Password (Leave blank for auto-load)">
+    <input type="number" id="lifespan" placeholder="Lifespan in Minutes (e.g. 60)">
+
+    <!-- SIZE-OPTIMIZATION COMPRESSION TOGGLE -->
+    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin: 5px 0; font-size: 13px; user-select: none;">
+        <input type="checkbox" id="skipEncryption" style="width: auto; margin: 0; cursor: pointer;">
+        <label for="skipEncryption" style="cursor: pointer; color: #aaa;">Optimize Size (Plaintext / No Password Encryption)</label>
+    </div>
+
+    <!-- QUICK PRESET LIFESPAN BUTTONS PANEL -->
+    <div style="display: flex; gap: 6px; margin: 4px 0 10px 0;">
+        <button type="button" class="preset-btn" data-mins="1440" style="background: #333; padding: 6px; font-size: 11px; margin: 0;">1 Day</button>
+        <button type="button" class="preset-btn" data-mins="4320" style="background: #333; padding: 6px; font-size: 11px; margin: 0;">3 Days</button>
+        <button type="button" class="preset-btn" data-mins="10080" style="background: #333; padding: 6px; font-size: 11px; margin: 0;">1 Week</button>
+        <button type="button" class="preset-btn" data-mins="0" style="background: #28a745; padding: 6px; font-size: 11px; margin: 0;">Permanent</button>
+    </div>
+    
+<button type="button" id="btnClear" style="background: #dc3545; margin-bottom: 5px;">Clear Loaded Files</button>
+<button id="btnCompile">Compile Local Data Capsule</button>
+
+</div>
+
+
+<!-- 🔓 EXTRACTOR CARD (NEW REVERSE FUNCTIONALITY) -->
+<div class="card">
+    <h3>🔓 Local Data Capsule Extractor</h3>
+    <p style="font-size:12px; color:#aaa; margin-top:-5px;">Drop an unencrypted .dat data pack here to review contents and extract files.</p>
+    
+    <div class="drop-zone dat-zone" id="datDropZone">
+        <span id="datDropText">Drag & Drop .dat Package Here</span>
+        <input type="file" id="datFileInput" accept=".dat" style="display:none;">
+    </div>
+
+    <div id="extractStatus">Waiting for package...</div>
+    <ul id="extractedFileList" style="display:none;"></ul>
+</div>
+
+<script>
+    // --- COMPILER LOGIC (ORIGINAL ELEMENTS RE-BOUND) ---
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const status = document.getElementById('status');
+    let loadedTracks = [];
+
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => handleFileSelection(e.target.files);
+
+    // Global drag states split by target zone boundary checks
+    window.ondragover = window.ondragenter = (e) => { e.preventDefault(); };
+    
+    dropZone.ondragover = () => { dropZone.classList.add('dragover'); };
+    dropZone.ondragleave = () => { dropZone.classList.remove('dragover'); };
+    dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFileSelection(e.dataTransfer.files); };
+
+    function handleFileSelection(files) {
+        if (!files.length) return;
+        const txtFiles = Array.from(files).filter(f => f.name.endsWith('.txt')).sort((a,b) => a.name.localeCompare(b.name));
+        if (!txtFiles.length) { status.innerText = "Error: Only .txt files are accepted."; return; }
+
+        status.innerText = `Processing ${txtFiles.length} files...`;
+        fileList.innerHTML = '';
+        fileList.style.display = 'block';
+        loadedTracks = [];
+        let completed = 0;
+
+        txtFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let text = e.target.result.trim();
+                if (text.length > 10) {
+                    if (!text.startsWith('data:audio/')) text = 'data:audio/mp3;base64,' + text;
+                    loadedTracks.push({ name: file.name.replace('.txt', ''), dataUrl: text });
+                    
+                    const li = document.createElement('li');
+                    li.innerText = `✓ ${file.name}`;
+                    fileList.appendChild(li);
+                }
+                completed++;
+                if (completed === txtFiles.length) status.innerText = `Ready to compile ${loadedTracks.length} tracks.`;
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    function rc4Encrypt(k, str) {
+        let s = [], j = 0, x, res = '';
+        for (let i = 0; i < 256; i++) s[i] = i;
+        for (let i = 0; i < 256; i++) { j = (j + s[i] + k.charCodeAt(i % k.length)) % 256; x = s[i]; s[i] = s[j]; s[j] = x; }
+        let i = 0; j = 0;
+        for (let y = 0; y < str.length; y++) { i = (i + 1) % 256; j = (j + s[i]) % 256; x = s[i]; s[i] = s[j]; s[j] = x; res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]); }
+        return res;
+    }
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const targetMinutes = btn.getAttribute('data-mins');
+            document.getElementById('lifespan').value = targetMinutes;
+            const originalBg = btn.style.background;
+            btn.style.background = "#007bff";
+            setTimeout(() => { btn.style.background = originalBg; }, 1500);
+        };
+    });
+
+    document.getElementById('btnCompile').onclick = () => {
+        if (!loadedTracks.length) { alert("Please drop or choose files first!"); return; }
+        const rawPass = document.getElementById('passKey').value.trim();
+        const mins = parseInt(document.getElementById('lifespan').value, 10) || 0;
+        const skipEncrypt = document.getElementById('skipEncryption').checked;
+        const expiryTimestamp = mins > 0 ? Date.now() + (mins * 60 * 1000) : 0;
+        
+        const payloadObject = {
+            expiry: expiryTimestamp,
+            hasAuth: rawPass.length > 0 && !skipEncrypt,
+            playlist: loadedTracks
+        };
+
+        if (skipEncrypt) {
+            const plainJsonStr = JSON.stringify(payloadObject);
+            const textEncoder = new TextEncoder();
+            const rawBinaryBufferBytes = textEncoder.encode(plainJsonStr);
+
+            const blob = new Blob([rawBinaryBufferBytes], { type: "application/octet-stream" });
+            const a = document.createElement("a");
+            a.download = `native_binary_pack_${Date.now()}.dat`;
+            a.href = window.URL.createObjectURL(blob);
+            a.click();
+            status.innerText = "Compiled pure zero-overhead binary data package!";
+        } else {
+            const targetEncryptionKey = rawPass.length > 0 ? rawPass : "SYSTEM_PASSTHROUGH_TOKEN_A5";
+            const plainJsonStr = unescape(encodeURIComponent(JSON.stringify(payloadObject)));
+            const encryptedBytes = rc4Encrypt(targetEncryptionKey, plainJsonStr);
+            const finalBase64Payload = btoa(encryptedBytes);
+
+            const compiledHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Sealed Local Data Capsule</title></head>
+<body>
+<div id="secure-playlist-metadata" data-payload="${finalBase64Payload}" data-encrypted="true"></div>
+<script>console.log("Sealed offline tracks active.");<\/script>
+</body>
+</html>`;
+
+            const blob = new Blob([compiledHtml], { type: "text/html" });
+            const a = document.createElement("a");
+            a.download = `encrypted_pack_${Date.now()}.html`;
+            a.href = window.URL.createObjectURL(blob);
+            a.click();
+
+status.innerText = "Compiled password-locked payload!";
+}
+};
+
+// --- 🔓 EXTRACTOR LOGIC (NEW REVERSE FUNCTION) ---
+const datDropZone = document.getElementById('datDropZone');
+const datFileInput = document.getElementById('datFileInput');
+const extractedFileList = document.getElementById('extractedFileList');
+const extractStatus = document.getElementById('extractStatus');
+
+datDropZone.onclick = () => datFileInput.click();
+datFileInput.onchange = (e) => handleDatFileSelection(e.target.files);
+datDropZone.ondragover = () => { datDropZone.classList.add('dragover'); };
+datDropZone.ondragleave = () => { datDropZone.classList.remove('dragover'); };
+datDropZone.ondrop = (e) => { e.preventDefault(); 
+datDropZone.classList.remove('dragover'); handleDatFileSelection(e.dataTransfer.files); };
+
+
+
+    function handleDatFileSelection(files) {
+        if (!files.length) return;
+        const datFile = files[0]; // Fixed file indexing from previous iteration
+        if (!datFile.name.endsWith('.dat')) { extractStatus.innerText = "Error: Only .dat files are valid here."; return; }
+
+        extractStatus.innerText = "Reading binary dat archive...";
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const arrayBuffer = e.target.result;
+                const textDecoder = new TextDecoder();
+                const decodedJsonString = textDecoder.decode(arrayBuffer);
+                const parsedPayload = JSON.parse(decodedJsonString);
+
+                if (!parsedPayload.playlist || !Array.isArray(parsedPayload.playlist)) {
+                    throw new Error("Invalid .dat data structure layout.");
+                }
+
+                // ⏱️ CHECK FOR EXPIRATION
+                if (parsedPayload.expiry > 0 && Date.now() > parsedPayload.expiry) {
+                    const expiryDate = new Date(parsedPayload.expiry).toLocaleString();
+                    extractStatus.style.color = "#dc3545"; // Turn text red for error
+                    extractStatus.innerText = `🛑 Access Denied: This capsule expired on ${expiryDate}`;
+                    extractedFileList.innerHTML = '';
+                    extractedFileList.style.display = 'none';
+                    return; // Stop execution entirely
+                }
+
+                // Reset status styling if it's valid
+                extractStatus.style.color = "#28a745"; 
+                extractStatus.innerText = `Successfully parsed ${parsedPayload.playlist.length} track(s) from pack!`;
+                extractedFileList.innerHTML = '';
+                extractedFileList.style.display = 'block';
+
+                parsedPayload.playlist.forEach(track => {
+                    const li = document.createElement('li');
+                    li.innerText = `${track.name}.txt `;
+
+                    const dlBtn = document.createElement('button');
+                    dlBtn.innerText = "Extract";
+                    dlBtn.className = "download-btn";
+                    dlBtn.onclick = () => {
+// Updated code: Strips the Data URL header if it exists
+const rawTextContent = track.dataUrl.replace(/^data:audio\/[^;]+;base64,/, ""); 
+const textBlob = new Blob([rawTextContent], { type: "text/plain" });
+
+                        const dlAnchor = document.createElement("a");
+                        dlAnchor.download = `${track.name}.txt`;
+                        dlAnchor.href = window.URL.createObjectURL(textBlob);
+                        dlAnchor.click();
+                    };
+
+                    li.appendChild(dlBtn);
+                    extractedFileList.appendChild(li);
+                });
+
+            } catch (err) {
+                console.error(err);
+                extractStatus.style.color = "#dc3545";
+                extractStatus.innerText = "Error unpacking file: Check if dat is encrypted or corrupted.";
+            }
+        };
+
+        reader.readAsArrayBuffer(datFile);
+    }
+
+
+
+function updateMetrics() {
+    const metricsPanel = document.getElementById('metricsPanel');
+    const metricMode = document.getElementById('metricMode');
+    const metricSize = document.getElementById('metricSize');
+    
+    if (!loadedTracks.length) {
+        metricsPanel.style.display = 'none';
+        return;
+    }
+    
+    metricsPanel.style.display = 'block';
+    const rawPass = document.getElementById('passKey').value.trim();
+    const skipEncrypt = document.getElementById('skipEncryption').checked;
+    const mins = parseInt(document.getElementById('lifespan').value, 10) || 0;
+    const expiryTimestamp = mins > 0 ? Date.now() + (mins * 60 * 1000) : 0;
+    
+    const payloadObject = {
+        expiry: expiryTimestamp,
+        hasAuth: rawPass.length > 0 && !skipEncrypt,
+        playlist: loadedTracks
+    };
+    
+    let totalBytes = 0;
+    
+    if (skipEncrypt) {
+        metricMode.innerText = "Plaintext Binary (.dat Pack)";
+        metricMode.style.color = "#007bff";
+        
+        // Exact byte conversion match for TextEncoder block
+        const plainJsonStr = JSON.stringify(payloadObject);
+        totalBytes = new TextEncoder().encode(plainJsonStr).length;
+    } else {
+        metricMode.innerText = "Sealed Web Capsule (.html Envelope)";
+        metricMode.style.color = "#ffc107";
+        
+        // Match the text translation sequence step exactly
+        const targetEncryptionKey = rawPass.length > 0 ? rawPass : "SYSTEM_PASSTHROUGH_TOKEN_A5";
+        const plainJsonStr = unescape(encodeURIComponent(JSON.stringify(payloadObject)));
+        
+        // RC4 outputs 1 string char per input char string byte array match width 
+        const encryptedLength = plainJsonStr.length; 
+        
+        // Base64 expansion equation factor approximation for btoa envelope wrap
+        const base64Length = Math.ceil(encryptedLength / 3) * 4;
+        
+        // Exact wrapper blueprint shell asset constant string weight sizing match
+        const envelopeShellTemplateLength = 220; 
+        totalBytes = base64Length + envelopeShellTemplateLength;
+    }
+    
+    // Formatting layout sizing utility rendering strings human readable
+    if (totalBytes < 1024) {
+        metricSize.innerText = `${totalBytes} Bytes`;
+    } else if (totalBytes < 1048576) {
+        metricSize.innerText = `${(totalBytes / 1024).toFixed(2)} KB`;
+    } else {
+        metricSize.innerText = `${(totalBytes / 1048576).toFixed(2)} MB`;
+    }
+}
+
+// Bind live metric processing updates onto original controller input elements changes
+document.getElementById('passKey').oninput = updateMetrics;
+document.getElementById('skipEncryption').onchange = updateMetrics;
+
+
+// Clear Button Logic
+document.getElementById('btnClear').onclick = () => {
+    loadedTracks = []; // Empty the tracking memory array
+    fileList.innerHTML = ''; // Clear out the file list visual elements
+    fileList.style.display = 'none'; // Hide the container box
+    status.innerText = "Ready..."; // Reset status message
+};
+
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Internal IT Excel Viewer & Editor</title>
+    <style>
+        body, html { margin:0; padding:0; width:100%; height:100%; font-family: sans-serif; overflow: hidden; background: #f5f5f5; }
+        #luckysheet { position:absolute; width:100%; height:calc(100% - 40px); left:0; top:40px; z-index: 1; display: none; }
+        
+        /* Secure IT Action Bar */
+        #it-action-bar {
+            position: absolute; top: 0; left: 0; width: 100%; height: 40px;
+            background: #1f2937; color: #ffffff; display: none; align-items: center;
+            justify-content: space-between; padding: 0 15px; box-sizing: border-box; z-index: 9999;
+        }
+        .action-btn {
+            background: #10b981; color: white; border: none; padding: 6px 14px;
+            border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px;
+        }
+        .action-btn:hover { background: #059669; }
+
+        /* Drag and Drop Pad Layout */
+        #drop-zone {
+            position: absolute; top: 10%; left: 10%; width: 80%; height: 80%;
+            border: 3px dashed #4a90e2; border-radius: 20px; background: #ffffff;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 999; transition: background 0.3s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        #drop-zone.dragover { background: #e1f0ff; border-color: #0076ff; }
+        #drop-zone p { color: #333333; font-size: 20px; font-weight: bold; margin: 10px 0; }
+        #drop-zone span { color: #666666; font-size: 14px; }
+        
+        /* Local Diagnostic Visualizer Overlay */
+        #it-local-reporter {
+            position: absolute; bottom: 10px; right: 10px; width: 400px; max-height: 150px;
+            background: rgba(0,0,0,0.85); color: #00ff00; font-family: monospace; font-size: 11px;
+            padding: 10px; border-radius: 4px; z-index: 10001; overflow-y: auto; pointer-events: none;
+        }
+    </style>
+
+    <script>
+        const CDN_BASE        = "https://cdn.jsdelivr.net";
+        const LUCKYSHEET_VER  = "luckysheet"; 
+        const LUCKYEXCEL_VER  = "luckyexcel";  
+
+        const stylesheets = [
+            `${CDN_BASE}/npm/${LUCKYSHEET_VER}/dist/plugins/css/pluginsCss.css`,
+            `${CDN_BASE}/npm/${LUCKYSHEET_VER}/dist/plugins/plugins.css`,
+            `${CDN_BASE}/npm/${LUCKYSHEET_VER}/dist/css/luckysheet.css`,
+            "https://cloudflare.com" // Restores the ribbon toolbar icon sets
+        ];
+
+        const scripts = [
+            `${CDN_BASE}/npm/${LUCKYSHEET_VER}/dist/plugins/js/plugin.js`,
+            `${CDN_BASE}/npm/${LUCKYSHEET_VER}/dist/luckysheet.umd.js`,
+            `${CDN_BASE}/npm/${LUCKYEXCEL_VER}/dist/luckyexcel.umd.js`,
+            "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js" // Engine for client-side recompilation
+        ];
+
+        let activeFileName = "Workbook.xlsx";
+
+        function debugLocal(msg, error = false) {
+            const el = document.getElementById('it-local-reporter');
+            if(el) {
+                el.innerHTML += `<div style="color:${error ? '#ff5555':'#55ff55'}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+                el.scrollTop = el.scrollHeight;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            stylesheets.forEach(href => {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet'; link.href = href;
+                document.head.appendChild(link);
+            });
+
+            function loadScriptsSequentially(index) {
+                if (index >= scripts.length) {
+                    debugLocal("Sandbox components mounted.");
+                    setupDragAndDrop();
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = scripts[index];
+                script.onload = () => loadScriptsSequentially(index + 1);
+                script.onerror = () => debugLocal(`CDN Fail on index ${index}`, true);
+                document.head.appendChild(script);
+            }
+            loadScriptsSequentially(0);
+        });
+
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.className = 'dragover'; });
+            dropZone.addEventListener('dragleave', () => { dropZone.className = ''; });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.className = '';
+                
+                const files = e.dataTransfer.files;
+                if (!files || files.length === 0) {
+                    debugLocal("Drop interception failed: No valid file structure recognized.", true);
+                    return;
+                }
+                
+                // **FIXED CRASH:** Must explicitly isolate index 0 object out of the FileList block!
+                const fileTarget = files[0]; 
+                activeFileName = fileTarget.name;
+                
+                debugLocal(`File targeting successful: ${activeFileName}`);
+                processLocalBlob(fileTarget);
+            });
+        }
+
+        function processLocalBlob(blob) {
+            if (typeof luckysheet === 'undefined' || typeof LuckyExcel === 'undefined') {
+                debugLocal("Fatal Error: Layout arrays missing from browser session.", true);
+                return;
+            }
+
+            debugLocal("Converting workbook matrix values...");
+            
+            try {
+                LuckyExcel.transformExcelToLucky(blob, function(exportJson, luckysheetfile) {
+                    if (!exportJson.sheets || exportJson.sheets.length === 0) {
+                        debugLocal("Parsing structural crash: Empty sheet object arrays.", true);
+                        return;
+                    }
+                    
+                    document.getElementById('drop-zone').style.display = 'none';
+                    document.getElementById('it-action-bar').style.display = 'flex';
+                    document.getElementById('luckysheet').style.display = 'block';
+                    
+                    luckysheet.create({
+                        container: 'luckysheet',
+                        data: exportJson.sheets,
+                        title: exportJson.info.name || "Local File View",
+                        showinfobar: false
+                    });
+                    debugLocal("Rendering layout complete!");
+                }, function(err){
+                    debugLocal(`Transform Engine Error: ${err}`, true);
+                });
+            } catch(e) {
+                debugLocal(`Execution exception: ${e.message}`, true);
+            }
+        }
+
+        // --- SECURE CLIENT-SIDE RICH COMPILATION EXPORTER ---
+        async function saveExcelFile() {
+            try {
+                debugLocal("Constructing fresh binary workbook allocation stream...");
+                const workbookData = luckysheet.getluckysheetfile();
+                const workbook = new ExcelJS.Workbook();
+
+                workbookData.forEach(sheetData => {
+                    const worksheet = workbook.addWorksheet(sheetData.name);
+                    
+                    // 1. Restore Custom Column Widths
+                    if (sheetData.config && sheetData.config.columnlen) {
+                        Object.keys(sheetData.config.columnlen).forEach(colIdx => {
+                            worksheet.getColumn(parseInt(colIdx) + 1).width = sheetData.config.columnlen[colIdx] / 8;
+                        });
+                    }
+
+                    // 2. Restore Custom Row Heights
+                    if (sheetData.config && sheetData.config.rowlen) {
+                        Object.keys(sheetData.config.rowlen).forEach(rowIdx => {
+                            worksheet.getRow(parseInt(rowIdx) + 1).height = sheetData.config.rowlen[rowIdx] * 0.75;
+                        });
+                    }
+
+                    if (!sheetData.data) return;
+
+                    // 3. Process Cell Grid Matrix
+                    sheetData.data.forEach((row, rIdx) => {
+                        if (!row) return;
+                        row.forEach((cell, cIdx) => {
+                            if (cell && (cell.v !== null && cell.v !== undefined || cell.f)) {
+                                const cellTarget = worksheet.getCell(rIdx + 1, cIdx + 1);
+                                
+                                // --- DATA VALIDATION / RE-COMPILATION ---
+                                if (cell.f) {
+                                    // Strip leading equal sign if present, ExcelJS appends it natively
+                                    const rawFormula = cell.f.replace(/^=/, '');
+                                    cellTarget.value = { formula: rawFormula, result: cell.v };
+                                } else {
+                                    cellTarget.value = cell.v;
+                                }
+
+                                // --- ESSENCE / STYLING RECOVERY ---
+                                
+                                // A. Cell Background Fills
+                                if (cell.bg) {
+                                    cellTarget.fill = {
+                                        type: 'pattern',
+                                        pattern: 'solid',
+                                        fgColor: { argb: cell.bg.replace('#', 'FF').toUpperCase() } // Needs ARGB Hex format
+                                    };
+                                }
+
+                                // B. Fonts & Weight Formatting
+                                if (cell.bl || cell.it || cell.fc || cell.fs || cell.ff) {
+                                    cellTarget.font = {
+                                        name: cell.ff || 'Calibri',
+                                        size: cell.fs || 11,
+                                        bold: !!cell.bl,
+                                        italic: !!cell.it,
+                                        color: cell.fc ? { argb: cell.fc.replace('#', 'FF').toUpperCase() } : undefined
+                                    };
+                                }
+
+                                // C. Text Alignments
+                                if (cell.ht !== undefined || cell.vt !== undefined) {
+                                    cellTarget.alignment = {
+                                        horizontal: cell.ht === '0' || cell.ht === 0 ? 'center' : cell.ht === '2' || cell.ht === 2 ? 'right' : 'left',
+                                        vertical: cell.vt === '0' || cell.vt === 0 ? 'middle' : cell.vt === '2' || cell.vt === 2 ? 'bottom' : 'top'
+                                    };
+                                }
+                            }
+                        });
+                    });
+
+                    // 4. Structural Re-stitching of Merged Matrices
+                    if (sheetData.config && sheetData.config.merge) {
+                        Object.values(sheetData.config.merge).forEach(mergeRange => {
+                            if (mergeRange) {
+                                worksheet.mergeCells(
+                                    mergeRange.r + 1,
+                                    mergeRange.c + 1,
+                                    mergeRange.r + mergeRange.rs,
+                                    mergeRange.c + mergeRange.cs
+                                );
+                            }
+                        });
+                    }
+                });
+
+                // 5. Binary Serialization and Local Client File Download
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = activeFileName.replace(/\.xlsx$/, '') + "_edited.xlsx";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                debugLocal("File saved and successfully packaged to device.");
+            } catch(err) {
+                debugLocal(`Export failed: ${err.message}`, true);
+                console.error(err);
+            }
+        }
+    </script>
+
+</head>
+<body>
+    <div id="it-action-bar">
+        <span style="font-size: 13px; font-weight: bold; opacity: 0.8;">🔒 Isolated Session (Local Editing Mode)</span>
+        <button class="action-btn" onclick="saveExcelFile()">⬇️ Save & Download File</button>
+    </div>
+
+    <div id="drop-zone">
+        <p>🔒 Secure Workplace IT Excel Viewer</p>
+        <span>Drag and drop your corporate .xlsx file right here</span>
+    </div>
+
+    <div id="luckysheet"></div>
+    <div id="it-local-reporter"></div>
+</body>
+</html>

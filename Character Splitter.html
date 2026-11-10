@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compact Text Splitter</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #cbd5e1;
+            --success: #16a34a;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 1rem;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        h1 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+            text-align: center;
+        }
+        .app-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            flex: 1;
+            min-height: 0; /* Critical for inner scrolling */
+        }
+        @media (min-width: 768px) {
+            .app-layout {
+                grid-template-columns: 350px 1fr;
+            }
+        }
+        .panel {
+            background: var(--card);
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .form-group {
+            margin-bottom: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .form-group.fixed {
+            flex: 0;
+        }
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        textarea {
+            width: 100%;
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            resize: none;
+            font-size: 0.9rem;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .main-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.6rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .main-btn:hover {
+            background-color: var(--primary-hover);
+        }
+        .output-panel {
+            overflow-y: auto;
+            gap: 0.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .chunk-row {
+            display: flex;
+            align-items: stretch;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            background: #f1f5f9;
+            overflow: hidden;
+            min-height: 40px;
+        }
+        .chunk-meta {
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #64748b;
+            background: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-width: 75px;
+            text-align: center;
+            border-right: 1px solid #cbd5e1;
+        }
+        .chunk-text {
+            flex: 1;
+            padding: 0.5rem;
+            font-size: 0.85rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: #ffffff;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .copy-btn {
+            background: #e2e8f0;
+            border: none;
+            border-left: 1px solid #cbd5e1;
+            padding: 0 1rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+            min-width: 80px;
+            transition: all 0.1s;
+        }
+        .copy-btn:hover {
+            background: #cbd5e1;
+        }
+        /* Style for the active/last pressed copy button */
+        .copy-btn.active-copy {
+            background: var(--success) !important;
+            color: white !important;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Compact Text Splitter</h1>
+
+    <div class="app-layout">
+        <!-- Left Side: Inputs -->
+        <div class="panel">
+            <div class="form-group">
+                <label for="inputText">Source Text</label>
+                <textarea id="inputText" placeholder="Paste text here..."></textarea>
+            </div>
+            <div class="form-group fixed">
+                <label for="charLimit">Character Limit</label>
+                <input type="number" id="charLimit" value="2000" min="1">
+            </div>
+            <button class="main-btn" onclick="splitText()">Split Text</button>
+        </div>
+
+        <!-- Right Side: Compact Outputs -->
+        <div id="outputContainer" class="panel output-panel">
+            <!-- Split rows will appear here natively -->
+        </div>
+    </div>
+
+    <script>
+        // Track the current active button across updates
+        let currentActiveButton = null;
+
+        function splitText() {
+            const text = document.getElementById('inputText').value;
+            const limit = parseInt(document.getElementById('charLimit').value, 10);
+            const container = document.getElementById('outputContainer');
+            
+            container.innerHTML = ''; 
+            currentActiveButton = null; // Reset tracker on new splits
+
+            if (!text) return;
+            if (isNaN(limit) || limit <= 0) return;
+
+            let index = 0;
+            let chunkNumber = 1;
+
+            while (index < text.length) {
+                const chunk = text.substr(index, limit);
+                createCompactRow(chunk, chunkNumber, container);
+                index += limit;
+                chunkNumber++;
+            }
+        }
+
+        function createCompactRow(text, number, container) {
+            const row = document.createElement('div');
+            row.className = 'chunk-row';
+
+            // Meta Info Block
+            const meta = document.createElement('div');
+            meta.className = 'chunk-meta';
+            meta.innerHTML = `<div>Part ${number}</div><div style="font-weight:normal; font-size:10px;">${text.length} ch</div>`;
+
+            // Text Preview Block
+            const textBlock = document.createElement('div');
+            textBlock.className = 'chunk-text';
+            textBlock.textContent = text;
+
+            // Copy Action Button
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.textContent = 'Copy';
+            
+            copyBtn.onclick = function() {
+                navigator.clipboard.writeText(text).then(() => {
+                    // Remove "active-copy" state and reset text from the previously clicked button
+                    if (currentActiveButton) {
+                        currentActiveButton.classList.remove('active-copy');
+                        currentActiveButton.textContent = 'Copy';
+                    }
+
+                    // Set this button as permanently active until next selection
+                    copyBtn.classList.add('active-copy');
+                    copyBtn.textContent = 'Copied';
+                    currentActiveButton = copyBtn;
+                });
+            };
+
+            row.appendChild(meta);
+            row.appendChild(textBlock);
+            row.appendChild(copyBtn);
+            container.appendChild(row);
+        }
+    </script>
+
+</body>
+</html>

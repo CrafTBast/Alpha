@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Splitter (Compact & Clear)</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: #f1f5f9;
+            color: #0f172a;
+            max-width: 900px;
+            margin: 15px auto;
+            padding: 0 10px;
+            font-size: 13px;
+        }
+        .container {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h2 { margin: 0 0 10px 0; font-size: 16px; text-align: center; }
+        
+        #drop-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            background: #f8fafc;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        #drop-zone.hover { border-color: #2563eb; background: #eff6ff; }
+        #file-info { margin-top: 4px; color: #2563eb; font-size: 12px; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 6px;
+        }
+        .control-group { display: flex; align-items: center; gap: 6px; }
+        label { font-weight: 600; white-space: nowrap; }
+        select, input {
+            padding: 4px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        button#process-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button#process-btn:hover { background: #1d4ed8; }
+        button#process-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        /* Compact Grid Output */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .output-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+        }
+        .output-header {
+            background: #f1f5f9;
+            padding: 4px 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .btn-group { display: flex; gap: 4px; }
+        .action-btn {
+            background: white;
+            border: 1px solid #cbd5e1;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .action-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+        
+        /* Distinct button branding */
+        .copy-btn { border-color: #bbf7d0; background: #f0fdf4; }
+        .copy-btn:hover { background: #dcfce7; }
+        .download-btn { border-color: #bfdbfe; background: #eff6ff; }
+        .download-btn:hover { background: #dbeafe; }
+
+        pre {
+            margin: 0;
+            padding: 6px;
+            height: 60px;
+            overflow-y: auto;
+            background: #272822;
+            color: #f8f8f2;
+            font-family: monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📄 Local File Splitter</h2>
+    
+    <div id="drop-zone">
+        <span>Drag & drop HTML/TXT file here, or click to browse</span>
+        <input type="file" id="file-input" accept=".html,.txt" style="display: none;">
+        <div id="file-info"></div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="split-mode">Split by:</label>
+            <select id="split-mode">
+                <option value="lines">Max lines per file</option>
+                <option value="parts">Total equal files</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label id="value-label" for="split-value">Amount:</label>
+            <input type="number" id="split-value" min="1" value="100" style="width: 70px;">
+        </div>
+        <button id="process-btn" disabled style="margin-left: auto;">Split File</button>
+    </div>
+
+    <div id="output-container"></div>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const splitMode = document.getElementById('split-mode');
+    const splitValue = document.getElementById('split-value');
+    const processBtn = document.getElementById('process-btn');
+    const outputContainer = document.getElementById('output-container');
+
+    let loadedFileContent = '';
+    let loadedFileName = 'split_file';
+    
+    // Global variable to keep track of the currently active copy button
+    let lastActiveCopyBtn = null;
+
+    splitMode.addEventListener('change', () => {
+        splitValue.value = splitMode.value === 'lines' ? 100 : 2;
+    });
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('hover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('hover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    function handleFiles(files) {
+        if (files.length === 0) return;
+        const file = files[0];
+        loadedFileName = file.name.replace(/\.[^/.]+$/, "");
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            loadedFileContent = e.target.result;
+            const lineCount = loadedFileContent.split(/\r?\n/).length;
+            fileInfo.textContent = `${file.name} (${lineCount.toLocaleString()} lines loaded)`;
+            processBtn.disabled = false;
+        };
+        reader.readAsText(file);
+    }
+
+    processBtn.addEventListener('click', () => {
+        const lines = loadedFileContent.split(/\r?\n/);
+        const totalLines = lines.length;
+        const mode = splitMode.value;
+        const val = parseInt(splitValue.value, 10);
+
+        if (!val || val < 1) return alert('Enter a valid number.');
+
+        let fileChunks = [];
+
+        if (mode === 'lines') {
+            for (let i = 0; i < totalLines; i += val) {
+                fileChunks.push(lines.slice(i, i + val).join('\n'));
+            }
+        } else {
+            const linesPerChunk = Math.ceil(totalLines / val);
+            for (let i = 0; i < val; i++) {
+                const start = i * linesPerChunk;
+                if (start >= totalLines) break;
+                fileChunks.push(lines.slice(start, start + linesPerChunk).join('\n'));
+            }
+        }
+
+        // Reset tracking variable when fresh outputs are rendered
+        lastActiveCopyBtn = null;
+        renderOutput(fileChunks);
+    });
+
+    function renderOutput(chunks) {
+        outputContainer.innerHTML = `<b style="font-size:12px;">Generated Files (${chunks.length})</b>`;
+        const grid = document.createElement('div');
+        grid.className = 'grid-container';
+        
+        chunks.forEach((chunk, index) => {
+            const currentFileName = `${loadedFileName}_part${index + 1}.txt`;
+            const card = document.createElement('div');
+            card.className = 'output-card';
+            
+            card.innerHTML = `
+                <div class="output-header">
+                    <span>${currentFileName} (${chunk.split('\n').length} lns)</span>
+                    <div class="btn-group">
+                        <button class="action-btn copy-btn" title="Copy Content">📋 Copy</button>
+                        <button class="action-btn download-btn" title="Download Text File">💾 Save</button>
+                    </div>
+                </div>
+                <pre><code></code></pre>
+            `;
+            
+            card.querySelector('pre code').textContent = chunk;
+            
+            card.querySelector('.copy-btn').addEventListener('click', function() {
+                navigator.clipboard.writeText(chunk).then(() => {
+                    // Reset the text of the previously clicked button, if one exists
+                    if (lastActiveCopyBtn && lastActiveCopyBtn !== this) {
+                        lastActiveCopyBtn.textContent = '📋 Copy';
+                    }
+                    
+                    // Set the current button state to OK and update the global active element reference
+                    this.textContent = '✅ OK!';
+                    lastActiveCopyBtn = this;
+                });
+            });
+
+            card.querySelector('.download-btn').addEventListener('click', () => {
+                const blob = new Blob([chunk], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = currentFileName;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            grid.appendChild(card);
+        });
+        outputContainer.appendChild(grid);
+    }
+</script>
+
+</body>
+</html>

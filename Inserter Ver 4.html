@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filename Extractor & Formatter</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 700px;
+            margin: 0 auto;
+            background-color: #fcfcfc;
+            color: #333;
+        }
+        h2 { color: #111; margin-bottom: 5px; }
+        .subtitle { color: #666; margin-top: 0; margin-bottom: 20px; }
+        
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            background: white;
+        }
+
+        .config-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .config-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .config-group label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #444;
+        }
+        .config-group input {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .action-btn {
+            background-color: #0076ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        .action-btn:hover { background-color: #0060d6; }
+
+        .output-container {
+            margin-top: 30px;
+        }
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .output-header h3 { margin: 0; }
+        
+        .copy-btn {
+            background-color: #27272a;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            font-size: 13px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .copy-btn:hover { background-color: #3f3f46; }
+
+        .output-box {
+            background-color: #f4f4f5;
+            border: 1px solid #e4e4e7;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 14px;
+            min-height: 60px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Filename Extractor & Formatter</h2>
+    <p class="subtitle">Extract clean filenames, exclude readmes, and quickly add custom paths.</p>
+    
+    <textarea id="rawData" placeholder="Paste your raw text here..."></textarea>
+
+    <div class="config-container">
+        <div class="config-group">
+            <label for="prefixInput">Prefix (Optional)</label>
+            <input type="text" id="prefixInput" placeholder="e.g., /src/components/">
+        </div>
+        <div class="config-group">
+            <label for="suffixInput">Suffix (Optional)</label>
+            <input type="text" id="suffixInput" placeholder="e.g., ,">
+        </div>
+    </div>
+
+    <button class="action-btn" onclick="extractFilenames()">Extract Files</button>
+
+    <div class="output-container">
+        <div class="output-header">
+            <h3>Formatted Filename List</h3>
+            <button class="copy-btn" onclick="copyToClipboard()">Copy List</button>
+        </div>
+        <div class="output-box" id="outputBox">Your formatted list will appear here...</div>
+    </div>
+
+    <script>
+        function extractFilenames() {
+            const rawText = document.getElementById('rawData').value;
+            const prefix = document.getElementById('prefixInput').value;
+            const suffix = document.getElementById('suffixInput').value;
+            const outputBox = document.getElementById('outputBox');
+            
+            const lines = rawText.split(/\r?\n/);
+            let fileList = [];
+
+            for (let line of lines) {
+                let trimmedLine = line.trim();
+
+                if (!trimmedLine) continue;
+
+                if (trimmedLine.startsWith('http') || trimmedLine.startsWith('©') || trimmedLine.includes('@')) {
+                    continue;
+                }
+
+                // New pattern: Searches anywhere in the line for a string containing an extension,
+                // ignoring directory slashes and stopping before typical trailing metadata (like spaces followed by numbers)
+                const fileMatch = trimmedLine.match(/(?:^|[\/\\])([^\/\\]+\.[a-zA-Z0-9]{1,5})(?:\s+[0-9]|\s*$)/);
+
+                if (fileMatch) {
+                    const cleanFileName = fileMatch[1].trim();
+
+                    if (cleanFileName.toLowerCase() === 'readme.md') {
+                        continue;
+                    }
+
+                    const formattedLine = prefix + cleanFileName + suffix;
+                    fileList.push(formattedLine);
+                }
+            }
+
+            if (fileList.length > 0) {
+                outputBox.innerText = fileList.join('\n');
+                outputBox.style.color = '#333';
+            } else {
+                outputBox.innerText = 'Extraction failed. Could not isolate any standalone filenames with extensions. Please verify your pasted text input.';
+                outputBox.style.color = '#dc2626';
+            }
+        }
+
+        function copyToClipboard() {
+            const textToCopy = document.getElementById('outputBox').innerText;
+            if(textToCopy === 'Your formatted list will appear here...' || textToCopy.startsWith('Extraction failed.')) {
+                alert('Nothing valid to copy yet!');
+                return;
+            }
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy text: ', err);
+            });
+        }
+    </script>
+</body>
+</html>
